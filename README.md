@@ -149,3 +149,16 @@ cd backend && ruff check . && mypy app
 # Frontend production build
 cd frontend && npm run build
 ```
+
+## Continuous Integration
+
+`.github/workflows/ci.yml` runs on every push and pull request:
+
+- **backend-quality** — `ruff check`, `ruff format --check`, `mypy --strict`, unit tests.
+- **backend-integration** — spins up PostgreSQL (pgvector), runs the real
+  `infra/postgres/init/01-init.sh`, applies migrations as the superuser, then runs
+  the RLS isolation tests as the least-privilege app role.
+- **frontend-build** — `npm ci` + typecheck + `vite build` from the committed lockfile.
+
+Conventions for changing CI (reproducibility, adding jobs/services, debugging a
+red pipeline) are captured in the `kompilo-ci` skill.
