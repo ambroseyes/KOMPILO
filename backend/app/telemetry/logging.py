@@ -3,6 +3,7 @@
 A single place to wire logging; OpenTelemetry tracing/metrics can plug in here
 later without touching the rest of the app.
 """
+
 from __future__ import annotations
 
 import logging

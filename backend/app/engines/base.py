@@ -9,6 +9,7 @@ sequence of stages:
 Each stage is a small, independently testable unit implementing ``Stage``.
 This module defines the contracts only — real stage logic lives in ``stages.py``.
 """
+
 from __future__ import annotations
 
 import abc

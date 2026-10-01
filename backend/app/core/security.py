@@ -4,9 +4,10 @@ NOTE: there is no authentication *endpoint* yet (no /login, no user model).
 These are the real, production-grade primitives the auth layer will build on —
 nothing here is mocked.
 """
+
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt
@@ -19,12 +20,12 @@ _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def hash_password(plain_password: str) -> str:
     """Return a bcrypt hash of the given password."""
-    return _pwd_context.hash(plain_password)
+    return str(_pwd_context.hash(plain_password))
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Check a plaintext password against a stored bcrypt hash."""
-    return _pwd_context.verify(plain_password, hashed_password)
+    return bool(_pwd_context.verify(plain_password, hashed_password))
 
 
 def create_access_token(
@@ -35,7 +36,7 @@ def create_access_token(
     extra_claims: dict[str, Any] | None = None,
 ) -> str:
     """Create a signed JWT carrying the subject and tenant scope (``tid``)."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + timedelta(minutes=expires_minutes or settings.access_token_expire_minutes)
     payload: dict[str, Any] = {
         "sub": subject,

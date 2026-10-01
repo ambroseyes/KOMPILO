@@ -1,4 +1,5 @@
 """Shared FastAPI dependencies: DB sessions and tenant resolution."""
+
 from __future__ import annotations
 
 import uuid

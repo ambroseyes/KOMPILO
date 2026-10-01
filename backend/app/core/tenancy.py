@@ -14,6 +14,7 @@ Isolation model
 If no tenant is set, ``current_setting('app.current_tenant', true)`` returns
 NULL and the policy matches no rows — the system fails CLOSED.
 """
+
 from __future__ import annotations
 
 import uuid

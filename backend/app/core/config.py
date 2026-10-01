@@ -3,6 +3,7 @@
 Settings load from environment variables (and a local .env during development)
 via pydantic-settings. No secret ever lives in the codebase.
 """
+
 from __future__ import annotations
 
 from functools import lru_cache
@@ -54,7 +55,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     """Cached settings singleton."""
-    return Settings()  # type: ignore[call-arg]
+    return Settings()
 
 
 settings = get_settings()

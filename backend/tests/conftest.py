@@ -3,6 +3,7 @@
 Settings are read at import time, so provide env BEFORE the app is imported.
 These values are for unit tests that touch NO external services.
 """
+
 from __future__ import annotations
 
 import os

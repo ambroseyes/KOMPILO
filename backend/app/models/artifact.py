@@ -1,4 +1,5 @@
 """Artifact — a tenant-scoped output produced around the Kompilo pipeline."""
+
 from __future__ import annotations
 
 import uuid

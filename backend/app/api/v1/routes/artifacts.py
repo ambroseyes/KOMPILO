@@ -4,6 +4,7 @@ Every handler uses ``TenantSession``, so PostgreSQL RLS filters rows to the
 current tenant. ``tenant_id`` on writes comes from ``TenantId`` (the authenticated
 tenant), never from the client; the policy's WITH CHECK is defense-in-depth.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -49,16 +50,12 @@ async def list_artifacts(db: TenantSession) -> list[Artifact]:
     return list(result.scalars().all())
 
 
-@router.get(
-    "/artifacts/{artifact_id}", response_model=ArtifactRead, summary="Get an artifact"
-)
+@router.get("/artifacts/{artifact_id}", response_model=ArtifactRead, summary="Get an artifact")
 async def get_artifact(artifact_id: uuid.UUID, db: TenantSession) -> Artifact:
     return await _get_owned_or_404(db, artifact_id)
 
 
-@router.patch(
-    "/artifacts/{artifact_id}", response_model=ArtifactRead, summary="Update an artifact"
-)
+@router.patch("/artifacts/{artifact_id}", response_model=ArtifactRead, summary="Update an artifact")
 async def update_artifact(
     artifact_id: uuid.UUID, payload: ArtifactUpdate, db: TenantSession
 ) -> Artifact:

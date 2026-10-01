@@ -11,6 +11,7 @@ Run against a DISPOSABLE database (it creates and deletes two tenants):
     DATABASE_URL=postgresql+asyncpg://kompilo_app:...@localhost:5432/kompilo \\
         pytest tests/integration -v
 """
+
 from __future__ import annotations
 
 import uuid
@@ -69,9 +70,7 @@ async def test_artifacts_crud_and_isolation() -> None:
             assert list_b.json() == []
 
             # B cannot read A's artifact by id → 404 (RLS invisibility).
-            get_b = await client.get(
-                f"/api/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_b}
-            )
+            get_b = await client.get(f"/api/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_b})
             assert get_b.status_code == 404
 
             # B cannot delete A's artifact → 404; A can → 204.

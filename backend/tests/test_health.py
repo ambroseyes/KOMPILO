@@ -1,4 +1,5 @@
 """Smoke tests that need no external services."""
+
 from __future__ import annotations
 
 import httpx

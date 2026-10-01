@@ -3,6 +3,7 @@
 NOTE: unauthenticated for bootstrap. Once the stages are real this MUST be
 moved behind the tenant-scoped dependency (see ``app.api.deps.TenantSession``).
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter

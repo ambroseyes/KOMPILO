@@ -3,6 +3,7 @@
 Note: ``tenant_id`` is intentionally ABSENT from create/update inputs — it is
 derived from the authenticated tenant, never from the client (see kompilo-rls).
 """
+
 from __future__ import annotations
 
 import uuid

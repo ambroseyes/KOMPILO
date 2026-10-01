@@ -1,4 +1,5 @@
 """Background tasks executed by ARQ workers."""
+
 from __future__ import annotations
 
 from typing import Any

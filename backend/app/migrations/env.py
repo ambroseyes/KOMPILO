@@ -1,4 +1,5 @@
 """Alembic migration environment (async)."""
+
 from __future__ import annotations
 
 import asyncio

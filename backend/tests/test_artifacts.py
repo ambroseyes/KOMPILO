@@ -1,4 +1,5 @@
 """No-DB unit tests for the artifacts routes (auth gate, fail-closed)."""
+
 from __future__ import annotations
 
 import httpx

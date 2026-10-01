@@ -2,6 +2,7 @@
 
 Run with:  arq app.workers.settings.WorkerSettings
 """
+
 from __future__ import annotations
 
 from arq.connections import RedisSettings

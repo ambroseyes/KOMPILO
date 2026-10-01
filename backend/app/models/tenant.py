@@ -1,4 +1,5 @@
 """Tenant registry and an example tenant-scoped entity (pipeline runs)."""
+
 from __future__ import annotations
 
 import uuid

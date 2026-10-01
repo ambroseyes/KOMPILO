@@ -1,8 +1,9 @@
 """API v1 router aggregation."""
+
 from fastapi import APIRouter
 
-from app.api.v1.routes import compile as compile_routes
 from app.api.v1.routes import artifacts, health, tenants
+from app.api.v1.routes import compile as compile_routes
 
 api_router = APIRouter()
 api_router.include_router(health.router, tags=["health"])

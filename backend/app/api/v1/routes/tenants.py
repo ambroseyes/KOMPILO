@@ -1,4 +1,5 @@
 """Tenant endpoints + a tenant-scoped endpoint that demonstrates RLS."""
+
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status

@@ -5,7 +5,10 @@ so the end-to-end pipeline is runnable and testable. NONE of this is real AI
 reasoning yet — each stage is explicitly marked and MUST be replaced with the
 real implementation.
 """
+
 from __future__ import annotations
+
+from typing import Any
 
 from app.engines.base import PipelineContext, Stage, StageResult
 
@@ -79,7 +82,7 @@ class ImproveStage(Stage):
     name = "improve"
 
     async def run(self, ctx: PipelineContext) -> StageResult:
-        output = {"suggestions": []}  # STUB
+        output: dict[str, Any] = {"suggestions": []}  # STUB
         ctx.artifacts[self.name] = output
         return StageResult(self.name, "skipped", _STUB_NOTE, output)
 

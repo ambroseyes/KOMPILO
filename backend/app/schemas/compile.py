@@ -1,4 +1,5 @@
 """Schemas for the Kompilo compile pipeline (intent -> execution strategy)."""
+
 from __future__ import annotations
 
 from typing import Any

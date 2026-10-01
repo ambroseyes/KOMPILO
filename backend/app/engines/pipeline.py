@@ -1,4 +1,5 @@
 """Pipeline orchestrator: runs ordered stages over a shared context."""
+
 from __future__ import annotations
 
 from typing import Any
