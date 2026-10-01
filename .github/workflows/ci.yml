@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-quality:
+    name: Backend — lint, types, unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Settings are read at import time; these are throwaway CI values (no secrets).
+      SECRET_KEY: ci-dummy-secret-key-0123456789
+      DATABASE_URL: postgresql+asyncpg://user:pass@localhost:5432/placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Ruff (lint)
+        run: ruff check .
+      - name: Ruff (format)
+        run: ruff format --check .
+      - name: mypy (strict)
+        run: mypy app
+      - name: Unit tests (no external services)
+        run: pytest tests --ignore=tests/integration -q
+
+  backend-integration:
+    name: Backend — RLS integration (PostgreSQL)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      POSTGRES_USER: kompilo
+      POSTGRES_PASSWORD: kompilo_pw
+      POSTGRES_DB: kompilo
+      APP_DB_USER: kompilo_app
+      APP_DB_PASSWORD: app_pw
+      # libpq vars so init/01-init.sh (run as superuser) can reach the service.
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGPASSWORD: kompilo_pw
+      SECRET_KEY: ci-dummy-secret-key-0123456789
+      DATABASE_URL: postgresql+asyncpg://kompilo_app:app_pw@localhost:5432/kompilo
+      ALEMBIC_DATABASE_URL: postgresql+asyncpg://kompilo:kompilo_pw@localhost:5432/kompilo
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: kompilo
+          POSTGRES_PASSWORD: kompilo_pw
+          POSTGRES_DB: kompilo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U kompilo -d kompilo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install PostgreSQL client (psql)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends postgresql-client
+      - name: Initialize database (pgvector + least-privilege app role)
+        # Reuses the exact same script docker-compose runs at DB init.
+        run: bash ../infra/postgres/init/01-init.sh
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Apply migrations (as superuser)
+        run: alembic upgrade head
+      - name: RLS integration tests (as least-privilege app role)
+        run: pytest tests/integration -q
+
+  frontend-build:
+    name: Frontend — typecheck & build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install (clean, from lockfile)
+        run: npm ci
+      - name: Build (tsc --noEmit && vite build)
+        run: npm run build
