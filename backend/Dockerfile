@@ -7,12 +7,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# curl is kept for optional container-level healthchecks.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/*
-
-# Install the package + dependencies. (asyncpg and bcrypt ship wheels.)
+# No system packages needed: asyncpg and bcrypt ship manylinux wheels.
+# Install the package + dependencies.
 COPY pyproject.toml ./
 COPY app ./app
 COPY alembic.ini ./
