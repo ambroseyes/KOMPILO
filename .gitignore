@@ -1,21 +1,32 @@
 # ── Python ───────────────────────────────────────────────
 __pycache__/
 *.py[cod]
+*.egg
 *.egg-info/
 .eggs/
+build/
 .venv/
 venv/
+env/
 .pytest_cache/
 .mypy_cache/
+.dmypy.json
 .ruff_cache/
+.tox/
+.cache/
 htmlcov/
 .coverage
+coverage.xml
 
 # ── Node / frontend ──────────────────────────────────────
 node_modules/
 dist/
+.vite/
+*.tsbuildinfo
 *.local
 npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # ── Secrets & env (NEVER commit real secrets) ────────────
 .env

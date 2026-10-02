@@ -13,8 +13,10 @@ description: >-
 
 CI lives in `.github/workflows/ci.yml` with three jobs:
 
-- **backend-quality** — `ruff check`, `ruff format --check`, `mypy --strict`,
-  unit tests (`pytest tests --ignore=tests/integration`).
+- **backend-quality** — `ruff check` (lint), `black --check` (format),
+  `mypy --strict`, unit tests (`pytest tests --ignore=tests/integration`).
+  ruff is the linter and black is the formatter — never also enable `ruff format`
+  (two formatters conflict).
 - **backend-integration** — a `pgvector/pgvector:pg16` service, runs the real
   `infra/postgres/init/01-init.sh`, `alembic upgrade head` (superuser), then the
   RLS tests (`pytest tests/integration`) as the least-privilege app role.
@@ -27,8 +29,9 @@ CI lives in `.github/workflows/ci.yml` with three jobs:
    delete assertions, don't `|| true`.
 2. **Reproducible = same versions everywhere.** CI must install exactly what was
    validated locally:
-   - Pin `ruff` and `mypy` to exact versions in `[project.optional-dependencies].dev`
-     (formatting/lint/type results change across versions).
+   - Pin `ruff`, `black` and `mypy` to exact versions in
+     `[project.optional-dependencies].dev` (lint/format/type results change
+     across versions).
    - Keep runtime dependency ranges aligned with the versions actually tested.
      If you validate locally with newer versions, bump the ranges — do not ship
      ranges that resolve to something you never ran.
@@ -45,7 +48,7 @@ CI lives in `.github/workflows/ci.yml` with three jobs:
 cd backend
 pip install -e ".[dev]"            # needs Python 3.12 (matches CI)
 ruff check .
-ruff format --check .
+black --check .
 mypy app
 pytest tests --ignore=tests/integration -q
 ```
@@ -59,9 +62,9 @@ PGHOST=localhost PGPASSWORD=pw POSTGRES_USER=kompilo POSTGRES_DB=kompilo \
   APP_DB_USER=kompilo_app APP_DB_PASSWORD=app_pw bash infra/postgres/init/01-init.sh
 ALEMBIC_DATABASE_URL=postgresql+asyncpg://kompilo:pw@localhost:5432/kompilo \
   DATABASE_URL=postgresql+asyncpg://kompilo_app:app_pw@localhost:5432/kompilo \
-  SECRET_KEY=ci-dummy-0123456789 alembic upgrade head
+  JWT_SECRET=ci-dummy-jwt-secret-0123456789ab alembic upgrade head
 DATABASE_URL=postgresql+asyncpg://kompilo_app:app_pw@localhost:5432/kompilo \
-  SECRET_KEY=ci-dummy-0123456789 pytest tests/integration -q
+  JWT_SECRET=ci-dummy-jwt-secret-0123456789ab pytest tests/integration -q
 docker rm -f ci-pg
 ```
 
@@ -79,7 +82,7 @@ docker rm -f ci-pg
 ## Secrets in CI
 
 Use throwaway values as job `env:` for ephemeral CI resources (DB password,
-`SECRET_KEY`). Never put a real secret in the workflow — real secrets go through
+`JWT_SECRET`). Never put a real secret in the workflow — real secrets go through
 GitHub Actions **secrets** (`${{ secrets.NAME }}`) only when a job genuinely
 needs to reach a protected resource.
 
@@ -89,6 +92,6 @@ needs to reach a protected resource.
    Align the pins (principle 2). This is the most common cause.
 2. Python version — CI runs 3.12; `requires-python` and `[tool.mypy] python_version`
    must say `3.12`.
-3. Format — run `ruff format .` and commit; `--check` fails on any drift.
+3. Format — run `black .` and commit; `black --check` fails on any drift.
 4. Integration DB — the app role must be created BEFORE `alembic upgrade`
    (init.sh first), and migrations run as the superuser URL, tests as the app URL.

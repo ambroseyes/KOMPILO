@@ -3,8 +3,8 @@ import { api } from "./lib/api";
 
 export default function App() {
   const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["readiness"],
-    queryFn: api.readiness,
+    queryKey: ["health"],
+    queryFn: api.health,
   });
 
   return (
@@ -15,34 +15,32 @@ export default function App() {
 
         <div className="mt-6">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-            Backend status
+            Backend health
           </h2>
 
           {isLoading && <p className="mt-2 text-slate-300">Checking…</p>}
 
           {isError && (
-            <p className="mt-2 text-red-400">
-              Unreachable: {(error as Error).message}
-            </p>
+            <p className="mt-2 text-red-400">Unreachable: {(error as Error).message}</p>
           )}
 
           {data && (
             <ul className="mt-3 space-y-2">
-              <li className="text-slate-200">
-                Overall:{" "}
+              <li className="flex items-center gap-2">
                 <span className={data.status === "ok" ? "text-emerald-400" : "text-amber-400"}>
-                  {data.status}
+                  {data.status === "ok" ? "●" : "○"}
                 </span>
+                <span className="text-slate-300">status</span>
+                <span className="text-slate-400">{data.status}</span>
               </li>
-              {data.components.map((c) => (
-                <li key={c.name} className="flex items-center gap-2">
-                  <span className={c.ok ? "text-emerald-400" : "text-red-400"}>
-                    {c.ok ? "●" : "○"}
-                  </span>
-                  <span className="text-slate-300">{c.name}</span>
-                  {c.detail && <span className="text-xs text-slate-500">({c.detail})</span>}
-                </li>
-              ))}
+              <li className="flex items-center gap-2">
+                <span className={data.db === "ok" ? "text-emerald-400" : "text-red-400"}>
+                  {data.db === "ok" ? "●" : "○"}
+                </span>
+                <span className="text-slate-300">database</span>
+                <span className="text-slate-400">{data.db}</span>
+              </li>
+              <li className="text-xs text-slate-500">version {data.version}</li>
             </ul>
           )}
         </div>

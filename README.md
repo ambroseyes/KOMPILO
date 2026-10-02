@@ -42,11 +42,11 @@ execution strategy:
 
 ```bash
 cp .env.example .env
-python3 -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(48))"
+python3 -c "import secrets; print('JWT_SECRET=' + secrets.token_urlsafe(48))"
 ```
 
 Open `.env` and:
-- paste the generated value into `SECRET_KEY`,
+- paste the generated value into `JWT_SECRET`,
 - set strong values for `POSTGRES_PASSWORD` and `APP_DB_PASSWORD`,
 - make the passwords inside `DATABASE_URL` and `ALEMBIC_DATABASE_URL` match the two above.
 
@@ -85,19 +85,20 @@ The exact checks (commands + expected results) are in the task summary and below
 
 2. **Liveness**
    ```bash
-   curl -s http://localhost:8000/api/v1/health/live
+   curl -s http://localhost:8000/v1/health/live
    ```
    Expected: `{"status":"ok"}`
 
-3. **Readiness (DB + Redis)**
+3. **Health (status + version + db)**
    ```bash
-   curl -s http://localhost:8000/api/v1/health/ready | python3 -m json.tool
+   curl -s http://localhost:8000/v1/health | python3 -m json.tool
    ```
-   Expected: `status: "ok"` with `postgres` and `redis` both `ok: true`.
+   Expected: `{"status": "ok", "version": "0.1.0", "db": "ok"}` (db `ko` if the
+   database is unreachable).
 
 4. **Compile pipeline (STUB)**
    ```bash
-   curl -s -X POST http://localhost:8000/api/v1/compile \
+   curl -s -X POST http://localhost:8000/v1/compile \
         -H 'Content-Type: application/json' \
         -d '{"intent":"ship a feature"}' | python3 -m json.tool
    ```
@@ -105,30 +106,49 @@ The exact checks (commands + expected results) are in the task summary and below
 
 5. **OpenAPI docs** — open http://localhost:8000/docs
 
-6. **Frontend** — open http://localhost:5173 (shows Kompilo + backend status: postgres/redis green)
+6. **Frontend** — open http://localhost:5173 (shows Kompilo + backend health: status/db/version)
 
 7. **Tenant isolation (RLS) quick check**
    ```bash
-   # Create a dev tenant, grab its id:
-   curl -s -X POST http://localhost:8000/api/v1/tenants \
+   # Create a dev organization (= tenant), grab its id:
+   curl -s -X POST http://localhost:8000/v1/organizations \
         -H 'Content-Type: application/json' \
         -d '{"slug":"acme","name":"Acme"}' | python3 -m json.tool
-   # List runs scoped to that tenant (empty list, RLS-filtered):
-   curl -s http://localhost:8000/api/v1/me/pipeline-runs \
-        -H 'X-Tenant-ID: <paste-tenant-id>'
+   # Its own org is visible when scoped to it:
+   curl -s http://localhost:8000/v1/organizations/me \
+        -H 'X-Tenant-ID: <paste-org-id>'
+   # Artifacts scoped to that tenant (empty list, RLS-filtered):
+   curl -s http://localhost:8000/v1/artifacts -H 'X-Tenant-ID: <paste-org-id>'
    ```
-   Expected: tenant created; the scoped list returns `[]` (and 401 without a tenant).
+   Expected: org created; the scoped artifacts list returns `[]` (and 401 without a tenant).
+
+8. **Auth (register → login → token-scoped access)**
+   ```bash
+   # Register a user in that org (DEV bootstrap), then log in:
+   curl -s -X POST http://localhost:8000/v1/auth/register -H 'Content-Type: application/json' \
+        -d '{"org_slug":"acme","email":"you@acme.io","password":"s3cret-pass"}'
+   TOKEN=$(curl -s -X POST http://localhost:8000/v1/auth/login -H 'Content-Type: application/json' \
+        -d '{"org_slug":"acme","email":"you@acme.io","password":"s3cret-pass"}' \
+        | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+   # Use the token — tenant is derived from it, no X-Tenant-ID needed:
+   curl -s http://localhost:8000/v1/auth/me        -H "Authorization: Bearer $TOKEN"
+   curl -s http://localhost:8000/v1/artifacts      -H "Authorization: Bearer $TOKEN"
+   ```
+   Expected: user created; `/auth/me` returns it; artifact calls are scoped to the token's tenant.
+   Business routes require a token (members); the first user of an org is its admin, and
+   admin-only operations (e.g. `DELETE /v1/artifacts/{id}`, `GET /v1/organizations/members`)
+   return 403 for non-admins.
 
 ---
 
 ## Architecture notes
 
-- **Multi-tenant RLS.** The API connects as a least-privilege Postgres role
-  (`kompilo_app`, `NOSUPERUSER`) that is subject to Row-Level Security. Each
-  request pins the active tenant via `SET LOCAL app.current_tenant`; the
-  `pipeline_runs` table has an RLS policy filtering by `tenant_id`, so tenants
-  cannot read each other's rows. Migrations run as the superuser (`kompilo`),
-  which owns the tables.
+- **Multi-tenant RLS.** `organizations` is the tenant root. The API connects as a
+  least-privilege Postgres role (`kompilo_app`, `NOSUPERUSER`) subject to Row-Level
+  Security. Each request pins the active tenant via `SET LOCAL app.tenant_id`; every
+  tenant-owned table has an `ENABLE`+`FORCE` RLS policy filtering by `tenant_id`, so
+  tenants cannot read each other's rows. Migrations run as the superuser (`kompilo`),
+  which owns the tables. See the `kompilo-rls` skill.
 - **Secrets.** Never committed; everything flows through `.env` (git-ignored).
 - **STUB stages.** `backend/app/engines/stages.py` returns placeholder output
   until real reasoning is implemented. Nothing stubbed is presented as real.
@@ -143,8 +163,8 @@ cd backend && pip install -e ".[dev]" && pytest
 docker compose exec backend alembic revision --autogenerate -m "describe change"
 docker compose exec backend alembic upgrade head
 
-# Lint / type-check
-cd backend && ruff check . && mypy app
+# Lint / format / type-check
+cd backend && ruff check . && black --check . && mypy app
 
 # Frontend production build
 cd frontend && npm run build
@@ -154,7 +174,7 @@ cd frontend && npm run build
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 
-- **backend-quality** — `ruff check`, `ruff format --check`, `mypy --strict`, unit tests.
+- **backend-quality** — `ruff check` (lint), `black --check` (format), `mypy --strict`, unit tests.
 - **backend-integration** — spins up PostgreSQL (pgvector), runs the real
   `infra/postgres/init/01-init.sh`, applies migrations as the superuser, then runs
   the RLS isolation tests as the least-privilege app role.

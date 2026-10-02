@@ -1,48 +1,38 @@
-"""Liveness and readiness probes."""
+"""Health endpoints."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Response, status
-from redis.asyncio import Redis
+from fastapi import APIRouter
 from sqlalchemy import text
 
-from app.core.config import settings
+from app import __version__
 from app.db.session import engine
-from app.schemas.common import HealthComponent, ReadinessResponse
+from app.schemas.common import HealthResponse
+from app.telemetry.logging import get_logger
 
 router = APIRouter()
+logger = get_logger(__name__)
+
+
+@router.get("/health", response_model=HealthResponse, summary="Service health")
+async def health() -> HealthResponse:
+    """Report service status, version, and database reachability.
+
+    Always returns 200 with a diagnostic body; ``status`` is ``degraded`` when
+    the database is unreachable (``db: ko``).
+    """
+    db = "ok"
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception:  # noqa: BLE001 — report as ko rather than failing the probe
+        logger.warning("health check: database unreachable", exc_info=True)
+        db = "ko"
+
+    return HealthResponse(status="ok" if db == "ok" else "degraded", version=__version__, db=db)
 
 
 @router.get("/health/live", summary="Liveness probe")
 async def live() -> dict[str, str]:
-    """Pure liveness — no external dependencies."""
+    """Pure liveness — no external dependencies (for k8s/load balancers)."""
     return {"status": "ok"}
-
-
-@router.get("/health/ready", summary="Readiness probe", response_model=ReadinessResponse)
-async def ready(response: Response) -> ReadinessResponse:
-    """Readiness — verifies PostgreSQL and Redis connectivity."""
-    components: list[HealthComponent] = []
-
-    # PostgreSQL
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-        components.append(HealthComponent(name="postgres", ok=True))
-    except Exception as exc:  # noqa: BLE001
-        components.append(HealthComponent(name="postgres", ok=False, detail=str(exc)))
-
-    # Redis
-    redis = Redis.from_url(settings.redis_url)
-    try:
-        await redis.ping()
-        components.append(HealthComponent(name="redis", ok=True))
-    except Exception as exc:  # noqa: BLE001
-        components.append(HealthComponent(name="redis", ok=False, detail=str(exc)))
-    finally:
-        await redis.aclose()
-
-    all_ok = all(c.ok for c in components)
-    if not all_ok:
-        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-    return ReadinessResponse(status="ok" if all_ok else "degraded", components=components)
