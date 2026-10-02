@@ -33,14 +33,21 @@ async def test_health_reports_version_and_db() -> None:
 
 @pytest.mark.asyncio
 async def test_pipeline_runs_all_stages_understand_real() -> None:
-    """The pipeline runs end-to-end key-less (heuristic understand): understand is
-    real, later stages are still STUB. (The /compile route itself is auth-gated —
+    """The pipeline runs end-to-end key-less (heuristic): understand and strategize
+    are real, later stages are still STUB. (The /compile route itself is auth-gated —
     see tests/test_compile.py.)"""
     from app.engines.pipeline import build_default_pipeline
 
-    ctx = await build_default_pipeline().run("ship a feature")
+    ctx = await build_default_pipeline().run("Implémente une fonction qui parse un fichier CSV")
     by_stage = {r.stage: r for r in ctx.trace}
     assert ctx.trace[0].stage == "understand"
+    assert ctx.trace[1].stage == "strategize"
     assert by_stage["understand"].is_stub is False
+    assert by_stage["strategize"].is_stub is False
+    # strategize consumed the CATR into a real Strategy.
+    strategy = ctx.artifacts["strategize"]
+    assert strategy["method"] == "heuristic-v1"
+    assert strategy["approach"] in {"single_step", "multi_step", "clarify_first"}
+    assert isinstance(strategy["steps"], list)
     # At least one later stage is still a placeholder.
     assert any(r.is_stub for r in ctx.trace)
