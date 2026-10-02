@@ -1,10 +1,11 @@
 """Pipeline stages.
 
-``understand`` is REAL: it turns the raw intent into a validated ``Catr`` via
-``app.engines.understand.understand`` — a Claude-backed analysis when a provider is
-configured (``claude-v1``), otherwise a deterministic heuristic (``heuristic-v1``).
-The remaining stages are still STUB placeholders (clearly marked) so the end-to-end
-pipeline stays runnable and testable until each is implemented for real.
+``understand`` and ``strategize`` are REAL. ``understand`` turns the raw intent into a
+validated ``Catr``; ``strategize`` turns that CATR into an execution ``Strategy``. Each
+is a Claude-backed analysis when a provider is configured (``claude-v1``), otherwise a
+deterministic heuristic (``heuristic-v1``). The remaining stages are still STUB
+placeholders (clearly marked) so the end-to-end pipeline stays runnable and testable
+until each is implemented for real.
 """
 
 from __future__ import annotations
@@ -12,7 +13,9 @@ from __future__ import annotations
 from typing import Any
 
 from app.engines.base import PipelineContext, Stage, StageResult
+from app.engines.strategize import strategize
 from app.engines.understand import understand
+from app.schemas.catr import Catr
 from app.telemetry.logging import get_logger
 
 logger = get_logger(__name__)
@@ -41,12 +44,22 @@ class UnderstandStage(Stage):
 
 
 class StrategizeStage(Stage):
+    """REAL — turns the CATR into an execution Strategy (LLM or heuristic)."""
+
     name = "strategize"
 
     async def run(self, ctx: PipelineContext) -> StageResult:
-        output = {"approach": "single-step", "candidates": 1}  # STUB
+        raw = ctx.artifacts.get("understand")
+        if not isinstance(raw, dict):
+            return StageResult(
+                self.name, "error", "no CATR from the understand stage", is_stub=False
+            )
+        catr = Catr.model_validate(raw)
+        strategy = await strategize(catr, ctx.context)
+        output = strategy.model_dump()
         ctx.artifacts[self.name] = output
-        return StageResult(self.name, "ok", _STUB_NOTE, output)
+        note = _METHOD_NOTE.get(strategy.method, f"strategize ({strategy.method})")
+        return StageResult(self.name, "ok", note, output, is_stub=False)
 
 
 class CompileStage(Stage):
