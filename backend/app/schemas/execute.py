@@ -45,6 +45,7 @@ class ExecuteStepResult(BaseModel):
     cost_usd: float
     cached: bool
     latency_ms: int
+    repaired: bool = False  # a JSON-contract repair retry was applied to this step
 
 
 class RealCost(BaseModel):

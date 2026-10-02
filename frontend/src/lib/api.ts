@@ -49,10 +49,15 @@ export interface ExecutionPlan {
   cost: CostEstimate;
 }
 
+export type DiagnosticLevel = "low" | "medium" | "high";
+
 export interface DiagnosticDimension {
   dimension: string;
-  level: string;
+  label: string;
+  level: DiagnosticLevel;
   detail: string;
+  reason: string | null;
+  recommendation: string | null;
 }
 
 export interface UnderstoodIntent {

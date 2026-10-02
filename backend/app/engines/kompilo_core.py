@@ -14,6 +14,7 @@ from collections.abc import Sequence
 
 from app.engines.ambiguity import AmbiguityEngine
 from app.engines.complexity import ComplexityEngine
+from app.engines.diagnostics import DiagnosticEngine
 from app.engines.intent import IntentEngine
 from app.engines.prompt_compiler import PromptCompiler
 from app.engines.registry import default_registry
@@ -26,14 +27,13 @@ from app.schemas.compile import (
     CompileMode,
     CompileResponse,
     CostEstimate,
-    DiagnosticDimension,
     ExecutionPlan,
     ExecutionStep,
     PromptRenders,
     UnderstoodIntent,
 )
 from app.schemas.registry import ModelCapability
-from app.schemas.strategize import AmbiguityReport, ComplexityAssessment, Strategy
+from app.schemas.strategize import ComplexityAssessment, Strategy
 
 _OUTPUT_TOKENS_EST: dict[str, int] = {
     "simple": 300,
@@ -41,56 +41,6 @@ _OUTPUT_TOKENS_EST: dict[str, int] = {
     "complex": 1500,
     "agentic": 2500,
 }
-
-
-def _confidence_level(value: float) -> str:
-    if value >= 0.75:
-        return "high"
-    return "medium" if value >= 0.5 else "low"
-
-
-def _specificity_level(catr: CanonicalAITask) -> str:
-    n = len(catr.missing_information)
-    if n == 0:
-        return "high"
-    return "medium" if n <= 2 else "low"
-
-
-def _base_diagnostics(
-    catr: CanonicalAITask, ambiguity: AmbiguityReport
-) -> list[DiagnosticDimension]:
-    by_sev = {"CRITICAL": 0, "IMPORTANT": 0, "OPTIONAL": 0}
-    for f in ambiguity.findings:
-        by_sev[f.severity] += 1
-    return [
-        DiagnosticDimension(
-            dimension="clarity",
-            level=ambiguity.decision,
-            detail=(
-                f"{by_sev['CRITICAL']} critical / {by_sev['IMPORTANT']} important / "
-                f"{by_sev['OPTIONAL']} optional findings"
-            ),
-        ),
-        DiagnosticDimension(
-            dimension="specificity",
-            level=_specificity_level(catr),
-            detail=(
-                "all key fields present"
-                if not catr.missing_information
-                else "missing: " + ", ".join(m.label for m in catr.missing_information)
-            ),
-        ),
-        DiagnosticDimension(
-            dimension="confidence",
-            level=_confidence_level(catr.meta.confidence),
-            detail=f"confidence={catr.meta.confidence:.2f} ({catr.meta.method})",
-        ),
-        DiagnosticDimension(
-            dimension="risk",
-            level=catr.risk,
-            detail=f"risk assessed as {catr.risk}",
-        ),
-    ]
 
 
 def _resolve_target(
@@ -192,7 +142,9 @@ class KompiloCore:
                     execution_plan=None,
                     compiled_prompt=None,
                     renders=None,
-                    diagnostics=_base_diagnostics(catr, ambiguity),
+                    diagnostics=DiagnosticEngine().assess(
+                        catr, ambiguity, output_format=output_format
+                    ),
                     questions=ambiguity.questions,
                     metadata=CompileMetadata(
                         deterministic=not llm_used,
@@ -216,18 +168,13 @@ class KompiloCore:
             catr, profile, mode=mode, output_format=output_format, quality_contract=quality_contract
         )
 
-        diagnostics = _base_diagnostics(catr, ambiguity)
-        diagnostics.append(
-            DiagnosticDimension(
-                dimension="complexity",
-                level=complexity.level,
-                detail=f"score={complexity.score} features={complexity.features}",
-            )
-        )
-        diagnostics.append(
-            DiagnosticDimension(
-                dimension="strategy_fit", level=strategy.kind, detail=strategy.rationale
-            )
+        diagnostics = DiagnosticEngine().assess(
+            catr,
+            ambiguity,
+            complexity=complexity,
+            strategy=strategy,
+            route=route,
+            output_format=output_format,
         )
 
         plan = ExecutionPlan(

@@ -84,12 +84,25 @@ class ExecutionPlan(BaseModel):
 
 
 # ── Diagnostics (multidimensional, explainable) ─────────────────────────────────────
+DiagnosticLevel = Literal["low", "medium", "high"]
+
+
 class DiagnosticDimension(BaseModel):
+    """One axis of the explainable diagnostic.
+
+    There is NEVER a single aggregate score: each axis stands on its own with a
+    ``level`` (low/medium/high), a one-line ``detail``, and — when the axis is weak
+    (not ``high``) — the ``reason`` it is weak plus a concrete ``recommendation``.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
-    dimension: str
-    level: str
+    dimension: str  # machine key, e.g. "clarity"
+    label: str  # human label (French), e.g. "Clarté"
+    level: DiagnosticLevel
     detail: str
+    reason: str | None = None  # why it is weak (set when level != "high")
+    recommendation: str | None = None  # corrective action (set when level != "high")
 
 
 # ── Metadata + response ─────────────────────────────────────────────────────────────

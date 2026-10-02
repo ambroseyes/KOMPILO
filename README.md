@@ -333,6 +333,18 @@ The exact checks (commands + expected results) are in the task summary and below
   `tokens × registry price`. It never logs the prompt or a secret. Providers sit behind
   one `LLMProvider` interface (OpenAI / Ollama / LM Studio, or the offline Echo STUB).
   See the `kompilo-gateway` skill.
+- **Explainable diagnostic.** `backend/app/engines/diagnostics.py` scores a compilation on
+  **8 independent axes** (clarity, completeness, specificity, robustness, executability,
+  context quality, output definition, ambiguity handling). Each axis is `low`/`medium`/`high`
+  with — when weak — the reason and a corrective action. There is **no single aggregate
+  score**: a prompt is strong or weak in nameable ways. See the `kompilo-solidify` skill.
+- **Error handling.** `backend/app/core/errors.py` defines a taxonomy
+  (INPUT/PROMPT/MODEL/TOOL/CONTEXT/POLICY/TIMEOUT/RATE_LIMIT/VALIDATION/UNKNOWN) and the
+  strategy **detect → classify → repair → retry → fallback → verify**. Each category maps
+  to a user-safe French message + HTTP status; the Gateway retries only retryable
+  categories (stopping early on policy/validation) then falls back; the Executor repairs a
+  malformed JSON output once; the Verifier has the final say. Internals/secrets are never
+  shown to the user.
 - **Secrets.** Never committed; everything flows through `.env` (git-ignored).
 - **STUB stages.** `backend/app/engines/stages.py` returns placeholder output
   until real reasoning is implemented. Nothing stubbed is presented as real.
@@ -340,7 +352,14 @@ The exact checks (commands + expected results) are in the task summary and below
 ## Useful commands
 
 ```bash
-# Backend unit tests (no external services needed)
+# Run the WHOLE backend test suite in ONE command (from the repo root).
+# Unit tests always run; integration tests run when a migrated Postgres + Redis are
+# reachable and skip cleanly otherwise. `make check` adds lint + types.
+make test          # full suite        │  make test-unit   # unit only, zero setup
+make check         # lint + types + tests
+make frontend-build
+
+# Or directly:
 cd backend && pip install -e ".[dev]" && pytest
 
 # New migration after changing models
@@ -353,6 +372,9 @@ cd backend && ruff check . && black --check . && mypy app
 # Frontend production build
 cd frontend && npm run build
 ```
+
+When all tests pass you see a single green line like
+`108 passed in 12s` (full suite) or `99 passed in 2s` (unit only) — no failures, no errors.
 
 ## Continuous Integration
 

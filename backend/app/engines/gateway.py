@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from redis.asyncio import Redis
 
 from app.core.config import settings
+from app.core.errors import ErrorCategory, KompiloError, classify_exception, is_retryable
 from app.core.redis import get_redis
 from app.engines.providers import LLMProvider, ProviderError, get_execution_provider
 from app.engines.registry import default_registry
@@ -34,8 +35,11 @@ logger = get_logger(__name__)
 _WS_RE = re.compile(r"\s+")
 
 
-class GatewayError(RuntimeError):
-    """All models failed after retries/fallback."""
+class GatewayError(KompiloError):
+    """All models failed after retries/fallback (classified as a MODEL error)."""
+
+    def __init__(self, detail: str, *, cause: BaseException | None = None) -> None:
+        super().__init__(ErrorCategory.MODEL, detail=detail, cause=cause)
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +157,14 @@ class Gateway:
                     )
                 except ProviderError as exc:
                     last_error = exc
+                    category = classify_exception(exc)
+                    # A non-retryable failure (policy, context, validation) will not
+                    # improve on retry or fallback — stop now with a clear message.
+                    if not is_retryable(category):
+                        logger.info("gateway: non-retryable %s on model=%s", category, model)
+                        raise KompiloError(
+                            category, detail=f"model={model}: {exc}", cause=exc
+                        ) from exc
                     await asyncio.sleep(settings.gateway_backoff_base_seconds * attempts)
                     continue
                 latency_ms = int((time.perf_counter() - started) * 1000)
@@ -198,5 +210,6 @@ class Gateway:
                 )
 
         raise GatewayError(
-            f"all {len(candidates)} model(s) failed after {attempts} attempts"
-        ) from last_error
+            f"all {len(candidates)} model(s) failed after {attempts} attempts",
+            cause=last_error,
+        )

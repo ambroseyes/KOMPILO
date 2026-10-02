@@ -49,9 +49,25 @@ async def test_compile_proceeds_on_clear_task() -> None:
     for variant in ("compact", "professional", "expert"):
         assert body["renders"][variant].strip()
 
-    # Diagnostic is multidimensional and explainable (not a single score).
+    # Diagnostic is multidimensional and explainable — 8 axes, each low/medium/high,
+    # never a single aggregate score.
     dims = {d["dimension"] for d in body["diagnostics"]}
-    assert {"clarity", "specificity", "confidence", "risk", "complexity", "strategy_fit"} <= dims
+    assert {
+        "clarity",
+        "completeness",
+        "specificity",
+        "robustness",
+        "executability",
+        "context_quality",
+        "output_definition",
+        "ambiguity_handling",
+    } == dims
+    for d in body["diagnostics"]:
+        assert d["level"] in {"low", "medium", "high"}
+        assert d["label"]  # human-readable label present
+        # A weak axis always explains itself (reason) and proposes a fix (recommendation).
+        if d["level"] != "high":
+            assert d["reason"] and d["recommendation"]
 
     assert body["metadata"]["costs_estimated"] is True
     assert body["metadata"]["deterministic"] is True  # no LLM called without a key
@@ -67,7 +83,10 @@ async def test_compile_asks_on_vague_task() -> None:
     assert body["compiled_prompt"] is None
     assert body["execution_plan"] is None
     assert body["renders"] is None
-    assert any(d["dimension"] == "clarity" and d["level"] == "ASK" for d in body["diagnostics"])
+    # A vague task has critical gaps → clarity is "low" with a reason + corrective action.
+    clarity = next(d for d in body["diagnostics"] if d["dimension"] == "clarity")
+    assert clarity["level"] == "low"
+    assert clarity["reason"] and clarity["recommendation"]
 
 
 @pytest.mark.asyncio

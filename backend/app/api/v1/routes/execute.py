@@ -16,9 +16,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, TenantSession, get_current_user
+from app.core.errors import KompiloError
 from app.core.redis import get_redis
 from app.engines.executor import Executor
-from app.engines.gateway import GatewayError
 from app.engines.kompilo_core import KompiloCore
 from app.engines.verifier import verify_output
 from app.models.execution import Execution
@@ -60,6 +60,7 @@ async def _steps_response(db: AsyncSession, execution_id: uuid.UUID) -> list[Exe
             cost_usd=r.cost_usd,
             cached=r.cached,
             latency_ms=r.latency_ms,
+            repaired=bool(r.input.get("repaired")) if isinstance(r.input, dict) else False,
         )
         for r in rows
     ]
@@ -164,13 +165,15 @@ async def execute_task(
             tenant_id=str(user.tenant_id),
             json_mode=json_mode,
         )
-    except GatewayError as exc:
+    except KompiloError as exc:
+        # Classified failure (model / timeout / rate-limit / policy / …): persist the
+        # internal detail, return the USER-friendly message + category (no internals).
         execution.status = "failed"
-        execution.error = str(exc)
+        execution.error = f"{exc.category}: {exc.detail}"
         execution.finished_at = func.now()
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY, detail="Execution failed: all models errored"
-        ) from exc
+        await db.flush()
+        status_code, body = exc.to_http()
+        raise HTTPException(status_code, detail=body) from exc
 
     # ── Journal each step + finalize the execution ──────────────────────────────
     for step in outcome.steps:
@@ -180,7 +183,7 @@ async def execute_task(
                 execution_id=execution.id,
                 step_order=step.order,
                 action=step.action,
-                input={"prompt": step.input_prompt},
+                input={"prompt": step.input_prompt, "repaired": step.repaired},
                 output=step.output,
                 input_tokens=step.input_tokens,
                 output_tokens=step.output_tokens,
