@@ -1,0 +1,1 @@
+"""Kompilo backend application package."""

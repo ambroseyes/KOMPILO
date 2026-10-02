@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kompilo-backend"
+version = "0.1.0"
+description = "Kompilo — AI Execution Intelligence backend (FastAPI)"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.142,<1.0",
+  "uvicorn[standard]>=0.54,<1.0",
+  "pydantic>=2.13,<3",
+  "pydantic-settings>=2.15,<3",
+  "sqlalchemy[asyncio]>=2.1,<2.2",
+  "asyncpg>=0.31,<0.32",
+  "alembic>=1.20,<2",
+  "arq>=0.28,<0.29",
+  "redis>=5.3,<6",
+  "pgvector>=0.3,<1.0",
+  "pyjwt>=2.15,<3",
+  "passlib[bcrypt]>=1.7.4,<2",
+]
+
+[project.optional-dependencies]
+# Dev tools are pinned so the quality gates are reproducible between local and CI.
+dev = [
+  "pytest>=9.1,<10",
+  "pytest-asyncio>=1.4,<2",
+  "httpx>=0.28,<0.29",
+  "ruff==0.16.10",
+  "mypy==2.3.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+strict = true
+ignore_missing_imports = true

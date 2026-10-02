@@ -1,0 +1,33 @@
+"""Schemas for the Kompilo compile pipeline (intent -> execution strategy)."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+
+class CompileRequest(BaseModel):
+    intent: str = Field(
+        ...,
+        min_length=1,
+        max_length=10_000,
+        description="Human intent to compile into an execution strategy.",
+    )
+    context: dict[str, Any] = Field(default_factory=dict)
+
+
+class StageTrace(BaseModel):
+    stage: str
+    status: str
+    note: str
+
+
+class CompileResponse(BaseModel):
+    intent: str
+    strategy: dict[str, Any]
+    trace: list[StageTrace]
+    is_stub: bool = Field(
+        True,
+        description="True while pipeline stages are STUB implementations.",
+    )
