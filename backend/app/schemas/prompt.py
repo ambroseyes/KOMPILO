@@ -20,6 +20,26 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 _SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]*$"
+_MAX_TAGS = 20
+
+
+def _normalize_tags(tags: list[str] | None) -> list[str]:
+    """Lowercase, strip, drop empties, de-duplicate (order-preserving), cap the count."""
+    if not tags:
+        return []
+    seen: set[str] = set()
+    out: list[str] = []
+    for raw in tags:
+        tag = raw.strip().lower()
+        if not tag or tag in seen:
+            continue
+        if len(tag) > 63:
+            raise ValueError(f"tag '{tag[:16]}…' exceeds 63 characters")
+        seen.add(tag)
+        out.append(tag)
+    if len(out) > _MAX_TAGS:
+        raise ValueError(f"at most {_MAX_TAGS} tags are allowed")
+    return out
 
 
 # ── Prompt ───────────────────────────────────────────────────────────────────
@@ -27,6 +47,21 @@ class PromptCreate(BaseModel):
     slug: str = Field(..., min_length=1, max_length=63, pattern=_SLUG_PATTERN)
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=10_000)
+    tags: list[str] = Field(default_factory=list)
+
+    @field_validator("tags")
+    @classmethod
+    def _clean_tags(cls, value: list[str]) -> list[str]:
+        return _normalize_tags(value)
+
+
+class PromptCreateFlat(PromptCreate):
+    """Flat create under ``POST /v1/prompts`` — carries its ``project_id`` in the body.
+
+    (The project-scoped ``POST /projects/{id}/prompts`` takes it from the path instead.)
+    """
+
+    project_id: uuid.UUID
 
 
 class PromptUpdate(BaseModel):
@@ -34,6 +69,7 @@ class PromptUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=10_000)
+    tags: list[str] | None = None
 
     @field_validator("name")
     @classmethod
@@ -41,6 +77,11 @@ class PromptUpdate(BaseModel):
         if value is None:
             raise ValueError("name cannot be null; omit it to leave it unchanged")
         return value
+
+    @field_validator("tags")
+    @classmethod
+    def _clean_tags(cls, value: list[str] | None) -> list[str] | None:
+        return None if value is None else _normalize_tags(value)
 
 
 class PromptRead(BaseModel):
@@ -52,6 +93,7 @@ class PromptRead(BaseModel):
     slug: str
     name: str
     description: str | None
+    tags: list[str]
     created_by: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
@@ -61,11 +103,13 @@ class PromptRead(BaseModel):
 class PromptVersionCreate(BaseModel):
     # ``version`` is server-allocated (monotonic per prompt) — never client-set.
     # ``source_intent`` is the raw human text the `understand` stage analyzes.
+    # The pipeline payloads are opaque JSON snapshots (objects OR arrays), so they are
+    # typed ``Any``: ``catr`` is an object, ``ir``/``diagnostics`` are arrays, etc.
     source_intent: str | None = Field(default=None, max_length=10_000)
-    catr: dict[str, Any] | None = None
-    ir: dict[str, Any] | None = None
-    renders: dict[str, Any] | None = None
-    diagnostics: dict[str, Any] | None = None
+    catr: Any | None = None
+    ir: Any | None = None
+    renders: Any | None = None
+    diagnostics: Any | None = None
     model_target: str | None = Field(default=None, max_length=100)
 
 
@@ -77,10 +121,10 @@ class PromptVersionRead(BaseModel):
     prompt_id: uuid.UUID
     version: int
     source_intent: str | None
-    catr: dict[str, Any] | None
-    ir: dict[str, Any] | None
-    renders: dict[str, Any] | None
-    diagnostics: dict[str, Any] | None
+    catr: Any | None
+    ir: Any | None
+    renders: Any | None
+    diagnostics: Any | None
     model_target: str | None
     author_id: uuid.UUID | None
     created_at: datetime

@@ -163,8 +163,136 @@ export interface ExecuteRequest {
   quality_contract?: string[];
 }
 
+// ── Prompt library + versioning (authenticated) ────────────────────────────────────
+export interface Project {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+}
+
+export interface Prompt {
+  id: string;
+  tenant_id: string;
+  project_id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  tags: string[];
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Page<T> {
+  items: T[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface PromptVersion {
+  id: string;
+  prompt_id: string;
+  version: number;
+  source_intent: string | null;
+  catr: unknown | null;
+  ir: unknown | null;
+  renders: PromptRenders | null;
+  diagnostics: DiagnosticDimension[] | null;
+  model_target: string | null;
+  author_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaveCompilationResponse {
+  version: PromptVersion;
+  compile: CompileResponse;
+}
+
+export interface FieldChange {
+  path: string;
+  change: "added" | "removed" | "changed";
+  before: unknown | null;
+  after: unknown | null;
+}
+
+export interface ScalarDelta {
+  before: string | null;
+  after: string | null;
+  changed: boolean;
+}
+
+export interface RenderDiff {
+  mode: string;
+  changed: boolean;
+  unified_diff: string;
+}
+
+export interface DiagnosticDelta {
+  dimension: string;
+  before: string | null;
+  after: string | null;
+  changed: boolean;
+}
+
+export interface VersionDiff {
+  prompt_id: string;
+  from_version: number;
+  to_version: number;
+  source_intent: ScalarDelta;
+  model_target: ScalarDelta;
+  catr_fields: FieldChange[];
+  renders: RenderDiff[];
+  diagnostics: DiagnosticDelta[];
+  summary: string;
+  note: string;
+}
+
+export interface ListPromptsParams {
+  project_id?: string;
+  tag?: string[];
+  q?: string;
+  limit?: number;
+  offset?: number;
+}
+
+function authed(token: string, init?: RequestInit): RequestInit {
+  return {
+    ...init,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      ...(init?.headers ?? {}),
+    },
+  };
+}
+
+function toQuery(params: ListPromptsParams): string {
+  const sp = new URLSearchParams();
+  if (params.project_id) sp.set("project_id", params.project_id);
+  if (params.q) sp.set("q", params.q);
+  if (params.limit != null) sp.set("limit", String(params.limit));
+  if (params.offset != null) sp.set("offset", String(params.offset));
+  for (const t of params.tag ?? []) sp.append("tag", t);
+  const s = sp.toString();
+  return s ? `?${s}` : "";
+}
+
+export interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
 export const api = {
   health: () => request<Health>("/v1/health"),
+  login: (body: { org_slug: string; email: string; password: string }) =>
+    request<TokenResponse>("/v1/auth/login", { method: "POST", body: JSON.stringify(body) }),
+  signup: (body: { org_slug: string; org_name: string; email: string; password: string }) =>
+    request<TokenResponse>("/v1/auth/signup", { method: "POST", body: JSON.stringify(body) }),
   compile: (req: CompileRequest) =>
     request<CompileResponse>("/v1/compile", {
       method: "POST",
@@ -176,4 +304,29 @@ export const api = {
       body: JSON.stringify(req),
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     }),
+
+  // Library
+  listProjects: (token: string) => request<Project[]>("/v1/projects", authed(token)),
+  createProject: (token: string, body: { slug: string; name: string }) =>
+    request<Project>("/v1/projects", authed(token, { method: "POST", body: JSON.stringify(body) })),
+  listPrompts: (token: string, params: ListPromptsParams = {}) =>
+    request<Page<Prompt>>(`/v1/prompts${toQuery(params)}`, authed(token)),
+  createPrompt: (
+    token: string,
+    body: { project_id: string; slug: string; name: string; tags?: string[] },
+  ) =>
+    request<Prompt>("/v1/prompts", authed(token, { method: "POST", body: JSON.stringify(body) })),
+  getPrompt: (token: string, id: string) => request<Prompt>(`/v1/prompts/${id}`, authed(token)),
+  listVersions: (token: string, id: string) =>
+    request<PromptVersion[]>(`/v1/prompts/${id}/versions`, authed(token)),
+  saveCompilation: (token: string, id: string, body: { task: string; mode?: CompileMode }) =>
+    request<SaveCompilationResponse>(
+      `/v1/prompts/${id}/compilations`,
+      authed(token, { method: "POST", body: JSON.stringify(body) }),
+    ),
+  diffVersions: (token: string, id: string, from: number, to: number) =>
+    request<VersionDiff>(
+      `/v1/prompts/${id}/versions/diff?from_version=${from}&to_version=${to}`,
+      authed(token),
+    ),
 };

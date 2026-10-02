@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,6 +36,11 @@ class Prompt(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDeleteMixin, 
     slug: Mapped[str] = mapped_column(String(63), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Free-form labels for library organization/filtering (tenant-scoped via RLS).
+    # GIN-indexed text[]; defaults to an empty array (see migration 0010).
+    tags: Mapped[list[str]] = mapped_column(
+        ARRAY(String(63)), nullable=False, server_default=text("'{}'::text[]")
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )

@@ -156,6 +156,27 @@ class KompiloCore:
         output_format: str = "markdown",
         quality_contract: list[str] | None = None,
     ) -> CompileResponse:
+        """Compile a task into a plan + prompt (the public, stateless result)."""
+        response, _catr = await self.compile_with_catr(
+            task,
+            target_model=target_model,
+            mode=mode,
+            output_format=output_format,
+            quality_contract=quality_contract,
+        )
+        return response
+
+    async def compile_with_catr(
+        self,
+        task: str,
+        *,
+        target_model: str | None = None,
+        mode: CompileMode = "professional",
+        output_format: str = "markdown",
+        quality_contract: list[str] | None = None,
+    ) -> tuple[CompileResponse, CanonicalAITask]:
+        """Like :meth:`compile`, but also returns the CATR so callers that persist a
+        version (the Version Manager) can snapshot it without re-running the pipeline."""
         quality_contract = quality_contract or []
 
         catr = await IntentEngine().run(task)
@@ -165,19 +186,22 @@ class KompiloCore:
 
         # ── ASK branch: stop before planning; return the critical questions. ─────────
         if ambiguity.decision == "ASK":
-            return CompileResponse(
-                understood=understood,
-                execution_plan=None,
-                compiled_prompt=None,
-                renders=None,
-                diagnostics=_base_diagnostics(catr, ambiguity),
-                questions=ambiguity.questions,
-                metadata=CompileMetadata(
-                    deterministic=not llm_used,
-                    llm_used=llm_used,
-                    target_model=None,
-                    notes=["Clarification required before compiling (critical gaps)."],
+            return (
+                CompileResponse(
+                    understood=understood,
+                    execution_plan=None,
+                    compiled_prompt=None,
+                    renders=None,
+                    diagnostics=_base_diagnostics(catr, ambiguity),
+                    questions=ambiguity.questions,
+                    metadata=CompileMetadata(
+                        deterministic=not llm_used,
+                        llm_used=llm_used,
+                        target_model=None,
+                        notes=["Clarification required before compiling (critical gaps)."],
+                    ),
                 ),
+                catr,
             )
 
         # ── PROCEED branch: full plan + compiled prompt. ─────────────────────────────
@@ -222,17 +246,20 @@ class KompiloCore:
                 f"Target model '{target_model}' forced (router primary was {route.primary})."
             )
 
-        return CompileResponse(
-            understood=understood,
-            execution_plan=plan,
-            compiled_prompt=compiled,
-            renders=renders,
-            diagnostics=diagnostics,
-            questions=[],
-            metadata=CompileMetadata(
-                deterministic=not llm_used,
-                llm_used=llm_used,
-                target_model=plan.target_model,
-                notes=notes,
+        return (
+            CompileResponse(
+                understood=understood,
+                execution_plan=plan,
+                compiled_prompt=compiled,
+                renders=renders,
+                diagnostics=diagnostics,
+                questions=[],
+                metadata=CompileMetadata(
+                    deterministic=not llm_used,
+                    llm_used=llm_used,
+                    target_model=plan.target_model,
+                    notes=notes,
+                ),
             ),
+            catr,
         )

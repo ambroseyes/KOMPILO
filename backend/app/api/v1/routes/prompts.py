@@ -15,24 +15,34 @@ Invariants (see the ``kompilo-rls`` / ``kompilo-crud`` skills):
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import func, select, update
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import ColumnElement, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, OrgAdmin, TenantSession, get_current_user
+from app.engines.version_manager import VersionManager
 from app.models.project import Project
 from app.models.prompt import Prompt, PromptVersion
+from app.schemas.common import Page
 from app.schemas.prompt import (
     PromptCreate,
+    PromptCreateFlat,
     PromptRead,
     PromptUpdate,
     PromptVersionCreate,
     PromptVersionRead,
 )
+from app.schemas.version import (
+    SaveCompilationRequest,
+    SaveCompilationResponse,
+    VersionDiff,
+)
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
+_versions = VersionManager()
 
 
 async def _get_active_project(db: AsyncSession, project_id: uuid.UUID) -> Project:
@@ -52,14 +62,8 @@ async def _get_active_prompt(db: AsyncSession, prompt_id: uuid.UUID) -> Prompt:
 
 
 # ── Prompts ────────────────────────────────────────────────────────────────────
-@router.post(
-    "/projects/{project_id}/prompts",
-    response_model=PromptRead,
-    status_code=status.HTTP_201_CREATED,
-    summary="Create a prompt in a project",
-)
-async def create_prompt(
-    project_id: uuid.UUID, payload: PromptCreate, user: CurrentUser, db: TenantSession
+async def _insert_prompt(
+    db: AsyncSession, *, user: CurrentUser, project_id: uuid.UUID, payload: PromptCreate
 ) -> Prompt:
     await _get_active_project(db, project_id)  # 404 if missing / cross-tenant / deleted
     prompt = Prompt(
@@ -69,6 +73,7 @@ async def create_prompt(
         slug=payload.slug,
         name=payload.name,
         description=payload.description,
+        tags=payload.tags,
     )
     db.add(prompt)
     try:
@@ -80,6 +85,78 @@ async def create_prompt(
         ) from exc
     await db.refresh(prompt)
     return prompt
+
+
+@router.post(
+    "/projects/{project_id}/prompts",
+    response_model=PromptRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a prompt in a project",
+)
+async def create_prompt(
+    project_id: uuid.UUID, payload: PromptCreate, user: CurrentUser, db: TenantSession
+) -> Prompt:
+    return await _insert_prompt(db, user=user, project_id=project_id, payload=payload)
+
+
+@router.post(
+    "/prompts",
+    response_model=PromptRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a prompt (flat — project_id in the body)",
+)
+async def create_prompt_flat(
+    payload: PromptCreateFlat, user: CurrentUser, db: TenantSession
+) -> Prompt:
+    create = PromptCreate(
+        slug=payload.slug, name=payload.name, description=payload.description, tags=payload.tags
+    )
+    return await _insert_prompt(db, user=user, project_id=payload.project_id, payload=create)
+
+
+@router.get(
+    "/prompts",
+    response_model=Page[PromptRead],
+    summary="List prompts (library) — filter by project/tags/text, paginated",
+)
+async def list_prompts_library(
+    db: TenantSession,
+    project_id: Annotated[uuid.UUID | None, Query(description="Restrict to one project.")] = None,
+    tag: Annotated[
+        list[str] | None, Query(description="Repeatable; a prompt must carry ALL given tags (AND).")
+    ] = None,
+    q: Annotated[str | None, Query(max_length=255, description="Search name/slug/desc.")] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> Page[PromptRead]:
+    """Tenant-scoped via RLS. Tag filtering uses the GIN-indexed ``tags @> ARRAY[...]``
+    containment operator; text search is a case-insensitive ILIKE over name/slug/desc."""
+    conditions: list[ColumnElement[bool]] = [Prompt.deleted_at.is_(None)]
+    if project_id is not None:
+        conditions.append(Prompt.project_id == project_id)
+    if tag:
+        wanted = [t.strip().lower() for t in tag if t.strip()]
+        if wanted:
+            conditions.append(Prompt.tags.contains(wanted))  # tags @> ARRAY[...]
+    if q:
+        like = f"%{q.strip()}%"
+        conditions.append(
+            Prompt.name.ilike(like) | Prompt.slug.ilike(like) | Prompt.description.ilike(like)
+        )
+
+    total = int(
+        (await db.execute(select(func.count()).select_from(Prompt).where(*conditions))).scalar_one()
+    )
+    stmt = (
+        select(Prompt)
+        .where(*conditions)
+        .order_by(Prompt.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+    rows = (await db.execute(stmt)).scalars().all()
+    items = [PromptRead.model_validate(p) for p in rows]
+    return Page[PromptRead](items=items, total=total, limit=limit, offset=offset)
 
 
 @router.get(
@@ -180,6 +257,27 @@ async def create_prompt_version(
     return prompt_version
 
 
+@router.post(
+    "/prompts/{prompt_id}/compilations",
+    response_model=SaveCompilationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Compile a task server-side and save it as the prompt's next version",
+)
+async def save_compilation(
+    prompt_id: uuid.UUID, payload: SaveCompilationRequest, user: CurrentUser, db: TenantSession
+) -> SaveCompilationResponse:
+    """The compile is run by Kompilo Core here (not trusted from the client), so the
+    stored snapshot (catr / ir / renders / diagnostics) always reflects a real run."""
+    await _get_active_prompt(db, prompt_id)  # 404 if missing / cross-tenant / deleted
+    version, compiled = await _versions.save_compilation(
+        db, prompt_id=prompt_id, tenant_id=user.tenant_id, author_id=user.id, req=payload
+    )
+    await db.refresh(version)
+    return SaveCompilationResponse(
+        version=PromptVersionRead.model_validate(version), compile=compiled
+    )
+
+
 @router.get(
     "/prompts/{prompt_id}/versions",
     response_model=list[PromptVersionRead],
@@ -193,6 +291,23 @@ async def list_prompt_versions(prompt_id: uuid.UUID, db: TenantSession) -> list[
         .order_by(PromptVersion.version)
     )
     return list((await db.execute(stmt)).scalars().all())
+
+
+@router.get(
+    "/prompts/{prompt_id}/versions/diff",
+    response_model=VersionDiff,
+    summary="Neutral diff between two versions of a prompt",
+)
+async def diff_prompt_versions(
+    prompt_id: uuid.UUID,
+    db: TenantSession,
+    from_version: Annotated[int, Query(ge=1, description="The baseline version number.")],
+    to_version: Annotated[int, Query(ge=1, description="The version to compare against.")],
+) -> VersionDiff:
+    """Declared BEFORE ``/versions/{version}`` so the literal ``diff`` segment is not
+    coerced to an int. The diff is neutral — it never says which version is 'better'."""
+    await _get_active_prompt(db, prompt_id)
+    return await _versions.diff(db, prompt_id, from_version, to_version)
 
 
 @router.get(
