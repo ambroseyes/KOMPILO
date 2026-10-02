@@ -22,3 +22,14 @@ async def test_login_validates_body() -> None:
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post("/v1/auth/login", json={"email": "x@example.com"})
     assert resp.status_code == 422  # missing org_slug/password → validation, no DB touched
+
+
+@pytest.mark.asyncio
+async def test_admin_route_requires_auth() -> None:
+    """Router-level auth gate rejects before any DB access."""
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        members = await client.get("/v1/organizations/members")
+        artifacts = await client.get("/v1/artifacts")
+    assert members.status_code == 401
+    assert artifacts.status_code == 401

@@ -13,10 +13,12 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
-from app.api.deps import DbSession, TenantSession
+from app.api.deps import DbSession, OrgAdmin, TenantSession
 from app.core.config import settings
 from app.core.tenancy import apply_tenant_guc
 from app.models.organization import Organization
+from app.models.user import User
+from app.schemas.auth import UserRead
 from app.schemas.organization import OrganizationCreate, OrganizationRead
 
 router = APIRouter()
@@ -54,3 +56,14 @@ async def get_my_organization(db: TenantSession) -> Organization:
     if org is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
     return org
+
+
+@router.get(
+    "/organizations/members",
+    response_model=list[UserRead],
+    summary="List the organization's members (org admin only)",
+)
+async def list_members(admin: OrgAdmin, db: TenantSession) -> list[User]:
+    # Admin-gated; RLS still scopes the users to the admin's own tenant.
+    result = await db.execute(select(User).order_by(User.created_at))
+    return list(result.scalars().all())

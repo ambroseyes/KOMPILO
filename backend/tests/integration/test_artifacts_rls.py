@@ -1,15 +1,8 @@
-"""Integration: artifacts CRUD + RLS isolation over HTTP.
+"""Integration: artifacts are authenticated, role-gated, and tenant-isolated.
 
-Requires a migrated database reachable as the app role (``kompilo_app``) via
-DATABASE_URL. Skips cleanly when no database is reachable, so the default
-``pytest`` run (no DB) reports this as skipped, not failed.
-
-Run against a DISPOSABLE database:
-
-    docker compose up -d postgres            # applies 01-init.sh (pgvector + app role)
-    cd backend && alembic upgrade head        # as superuser (ALEMBIC_DATABASE_URL)
-    DATABASE_URL=postgresql+asyncpg://kompilo_app:...@localhost:5432/kompilo \\
-        pytest tests/integration -v
+Business routes now require a real user (JWT). Members can create/list/get/update;
+only org admins can delete. RLS keeps everything scoped to the caller's tenant.
+Requires a migrated DB reachable as the app role; skips otherwise. DISPOSABLE DB.
 """
 
 from __future__ import annotations
@@ -35,13 +28,11 @@ async def _db_reachable() -> bool:
         return False
 
 
-async def _create_org(slug: str, name: str) -> uuid.UUID:
-    """Seed an organization. ``organizations`` is RLS'd on ``id``, so the GUC must
-    equal the new id for the INSERT's WITH CHECK to pass."""
+async def _create_org(slug: str) -> uuid.UUID:
     org_id = uuid.uuid4()
     async with session_scope() as s:
-        await apply_tenant_guc(s, org_id)
-        s.add(Organization(id=org_id, slug=slug, name=name))
+        await apply_tenant_guc(s, org_id)  # id == GUC so WITH CHECK passes
+        s.add(Organization(id=org_id, slug=slug, name=slug))
     return org_id
 
 
@@ -51,43 +42,72 @@ async def _delete_org(org_id: uuid.UUID) -> None:
         await s.execute(sa.delete(Organization).where(Organization.id == org_id))
 
 
+async def _register_login(client: httpx.AsyncClient, slug: str, email: str) -> str:
+    await client.post(
+        "/v1/auth/register",
+        json={"org_slug": slug, "email": email, "password": "s3cret-pass"},
+    )
+    resp = await client.post(
+        "/v1/auth/login",
+        json={"org_slug": slug, "email": email, "password": "s3cret-pass"},
+    )
+    assert resp.status_code == 200, resp.text
+    return str(resp.json()["access_token"])
+
+
+def _bearer(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
 @pytest.mark.asyncio
-async def test_artifacts_crud_and_isolation() -> None:
+async def test_artifacts_authz_and_isolation() -> None:
     if not await _db_reachable():
         pytest.skip("No database reachable at DATABASE_URL")
 
     suffix = uuid.uuid4().hex[:8]
-    tid_a = str(await _create_org(f"a-{suffix}", "Org A"))
-    tid_b = str(await _create_org(f"b-{suffix}", "Org B"))
+    slug_a, slug_b = f"art-a-{suffix}", f"art-b-{suffix}"
+    org_a = await _create_org(slug_a)
+    org_b = await _create_org(slug_b)
 
     transport = httpx.ASGITransport(app=app)
     try:
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            # A creates an artifact.
+            admin = await _register_login(client, slug_a, "admin@a.io")  # first user → admin
+            member = await _register_login(client, slug_a, "member@a.io")  # not admin
+            other = await _register_login(client, slug_b, "admin@b.io")  # tenant B
+
+            # Unauthenticated → 401.
+            assert (await client.get("/v1/artifacts")).status_code == 401
+
+            # A member can create and list.
             created = await client.post(
-                "/v1/artifacts",
-                headers={"X-Tenant-ID": tid_a},
-                json={"name": "strat-1", "kind": "strategy", "content": {"k": 1}},
+                "/v1/artifacts", headers=_bearer(member), json={"name": "x"}
             )
             assert created.status_code == 201, created.text
             art_id = created.json()["id"]
-            assert created.json()["tenant_id"] == tid_a
+            assert created.json()["tenant_id"] == str(org_a)
 
-            # A sees exactly its artifact; B sees none.
-            list_a = await client.get("/v1/artifacts", headers={"X-Tenant-ID": tid_a})
-            list_b = await client.get("/v1/artifacts", headers={"X-Tenant-ID": tid_b})
-            assert [x["id"] for x in list_a.json()] == [art_id]
-            assert list_b.json() == []
+            listed = await client.get("/v1/artifacts", headers=_bearer(member))
+            assert [a["id"] for a in listed.json()] == [art_id]
 
-            # B cannot read A's artifact by id → 404 (RLS invisibility).
-            get_b = await client.get(f"/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_b})
-            assert get_b.status_code == 404
+            # Tenant B sees none of A's artifacts (token-scoped isolation).
+            assert (await client.get("/v1/artifacts", headers=_bearer(other))).json() == []
 
-            # B cannot delete A's artifact → 404; A can → 204.
-            del_b = await client.delete(f"/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_b})
-            assert del_b.status_code == 404
-            del_a = await client.delete(f"/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_a})
-            assert del_a.status_code == 204
+            # Delete is org-admin only: member → 403, admin → 204.
+            assert (
+                await client.delete(f"/v1/artifacts/{art_id}", headers=_bearer(member))
+            ).status_code == 403
+            assert (
+                await client.delete(f"/v1/artifacts/{art_id}", headers=_bearer(admin))
+            ).status_code == 204
+
+            # Admin-only members listing: admin sees both A users, member → 403.
+            members = await client.get("/v1/organizations/members", headers=_bearer(admin))
+            assert members.status_code == 200
+            assert {m["email"] for m in members.json()} == {"admin@a.io", "member@a.io"}
+            assert (
+                await client.get("/v1/organizations/members", headers=_bearer(member))
+            ).status_code == 403
     finally:
-        await _delete_org(uuid.UUID(tid_a))
-        await _delete_org(uuid.UUID(tid_b))
+        await _delete_org(org_a)
+        await _delete_org(org_b)

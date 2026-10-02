@@ -135,6 +135,9 @@ The exact checks (commands + expected results) are in the task summary and below
    curl -s http://localhost:8000/v1/artifacts      -H "Authorization: Bearer $TOKEN"
    ```
    Expected: user created; `/auth/me` returns it; artifact calls are scoped to the token's tenant.
+   Business routes require a token (members); the first user of an org is its admin, and
+   admin-only operations (e.g. `DELETE /v1/artifacts/{id}`, `GET /v1/organizations/members`)
+   return 403 for non-admins.
 
 ---
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -49,11 +49,14 @@ async def register(payload: RegisterRequest, db: DbSession) -> User:
 
     # Pin the tenant so the user INSERT satisfies the RLS WITH CHECK.
     await apply_tenant_guc(db, org_id)
+    # Bootstrap: the first user of an org becomes its admin.
+    is_first_user = (await db.execute(select(func.count(User.id)))).scalar_one() == 0
     user = User(
         tenant_id=org_id,
         email=payload.email.strip().lower(),
         hashed_password=hash_password(payload.password),
         full_name=payload.full_name,
+        is_org_admin=is_first_user,
     )
     db.add(user)
     try:

@@ -120,6 +120,25 @@ async def list_artifacts(db: TenantSession) -> list[Artifact]:
 
 ---
 
+## Authenticated routes & roles (authz on top of RLS)
+
+RLS *isolates* tenants; it does not *authorize* users. Business routes require a
+real user and derive the tenant from the token, never the client:
+
+- `CurrentUser` (`app.api.deps`) — authenticated active user, loaded inside the
+  tenant-scoped session. Enforce it router-wide:
+  `APIRouter(dependencies=[Depends(get_current_user)])`.
+- On writes use `user.tenant_id` (never a client-supplied value); the RLS
+  `WITH CHECK` is the backstop.
+- `OrgAdmin` — `CurrentUser` + `is_org_admin`, for admin-only operations
+  (e.g. delete, member management). Team-scoped roles live in `memberships`.
+- Bootstrap: the first user registered in an org becomes its admin.
+
+RLS still runs underneath, so even an authorized user only ever sees/writes their
+own tenant's rows.
+
+---
+
 ## Pitfalls that cause SILENT cross-tenant leaks
 
 1. **App connects as superuser or table owner** → RLS skipped entirely. The app

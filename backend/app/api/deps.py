@@ -127,8 +127,21 @@ async def get_current_user(
     return user
 
 
+async def require_org_admin(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Require the authenticated user to be an organization admin (``is_org_admin``)."""
+    if not user.is_org_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Organization admin role required",
+        )
+    return user
+
+
 # Convenience aliases for route signatures.
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 TenantSession = Annotated[AsyncSession, Depends(get_tenant_session)]
 TenantId = Annotated[uuid.UUID, Depends(get_current_tenant_id)]
 CurrentUser = Annotated[User, Depends(get_current_user)]
+OrgAdmin = Annotated[User, Depends(require_org_admin)]
