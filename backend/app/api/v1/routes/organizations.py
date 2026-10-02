@@ -9,11 +9,12 @@ provisioning exists; it pins the GUC to the new id so the RLS WITH CHECK passes.
 from __future__ import annotations
 
 import uuid
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 
-from app.api.deps import DbSession, OrgAdmin, TenantSession
+from app.api.deps import DbSession, Principal, TenantSession, require_role
 from app.core.config import settings
 from app.core.tenancy import apply_tenant_guc
 from app.models.organization import Organization
@@ -61,9 +62,12 @@ async def get_my_organization(db: TenantSession) -> Organization:
 @router.get(
     "/organizations/members",
     response_model=list[UserRead],
-    summary="List the organization's members (org admin only)",
+    summary="List the organization's members (owner/admin only)",
 )
-async def list_members(admin: OrgAdmin, db: TenantSession) -> list[User]:
-    # Admin-gated; RLS still scopes the users to the admin's own tenant.
+async def list_members(
+    principal: Annotated[Principal, Depends(require_role("owner", "admin"))],
+    db: TenantSession,
+) -> list[User]:
+    # RBAC-gated via require_role; RLS still scopes the users to the caller's tenant.
     result = await db.execute(select(User).order_by(User.created_at))
     return list(result.scalars().all())

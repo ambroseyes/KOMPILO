@@ -125,22 +125,38 @@ The exact checks (commands + expected results) are in the task summary and below
    ```
    Expected: org created; the scoped artifacts list returns `[]` (and 401 without a tenant).
 
-8. **Auth (register → login → token-scoped access)**
+8. **Auth (signup → token-scoped access → refresh → RBAC)**
    ```bash
-   # Register a user in that org (DEV bootstrap), then log in:
-   curl -s -X POST http://localhost:8000/v1/auth/register -H 'Content-Type: application/json' \
-        -d '{"org_slug":"acme","email":"you@acme.io","password":"s3cret-pass"}'
-   TOKEN=$(curl -s -X POST http://localhost:8000/v1/auth/login -H 'Content-Type: application/json' \
-        -d '{"org_slug":"acme","email":"you@acme.io","password":"s3cret-pass"}' \
-        | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
-   # Use the token — tenant is derived from it, no X-Tenant-ID needed:
-   curl -s http://localhost:8000/v1/auth/me        -H "Authorization: Bearer $TOKEN"
-   curl -s http://localhost:8000/v1/artifacts      -H "Authorization: Bearer $TOKEN"
+   # Signup creates a brand-new organization + its OWNER user, returning both tokens:
+   TOKENS=$(curl -s -X POST http://localhost:8000/v1/auth/signup -H 'Content-Type: application/json' \
+        -d '{"org_slug":"acme","org_name":"Acme","email":"owner@acme.io","password":"s3cret-pass"}')
+   TOKEN=$(echo "$TOKENS"   | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+   REFRESH=$(echo "$TOKENS" | python3 -c "import sys,json;print(json.load(sys.stdin)['refresh_token'])")
+   # Use the access token — tenant is derived from it, no X-Tenant-ID needed:
+   curl -s http://localhost:8000/v1/auth/me   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+   curl -s http://localhost:8000/v1/artifacts -H "Authorization: Bearer $TOKEN"
+   # Exchange the refresh token for a fresh access token (rotation):
+   curl -s -X POST http://localhost:8000/v1/auth/refresh -H 'Content-Type: application/json' \
+        -d "{\"refresh_token\":\"$REFRESH\"}" | python3 -m json.tool
    ```
-   Expected: user created; `/auth/me` returns it; artifact calls are scoped to the token's tenant.
-   Business routes require a token (members); the first user of an org is its admin, and
-   admin-only operations (e.g. `DELETE /v1/artifacts/{id}`, `GET /v1/organizations/members`)
-   return 403 for non-admins.
+   Expected: `/auth/me` returns the user with `role: "owner"`; the token response is
+   `{access_token, refresh_token, token_type:"bearer", expires_in:1800}`. The signup user
+   is the org **owner**; `DELETE` routes and `GET /v1/organizations/members` return **403**
+   for a plain `member`. (`/v1/auth/register` still adds extra users to an existing org in
+   dev.) See the `kompilo-auth` skill.
+
+   **Test it in Swagger (`/docs`):** open http://localhost:8000/docs → run
+   `POST /v1/auth/signup` → copy `access_token` from the response → click **Authorize**
+   (top-right), paste the token, **Authorize** → now every 🔒 endpoint is called with the
+   bearer token. Example token response:
+   ```json
+   {
+     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+     "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+     "token_type": "bearer",
+     "expires_in": 1800
+   }
+   ```
 
 9. **Projects / Prompts / Versions (CRUD + versioning)** — reuse `$TOKEN` from step 8.
    ```bash
