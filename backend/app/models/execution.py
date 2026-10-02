@@ -22,12 +22,10 @@ class Execution(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDeleteMixi
         Index("ix_executions_tenant_id_status", "tenant_id", "status"),
     )
 
-    # Optional: NULL == an ad-hoc intent compile not bound to a stored version
-    # (see migration 0007). A stored-version run still sets it.
-    prompt_version_id: Mapped[uuid.UUID | None] = mapped_column(
+    prompt_version_id: Mapped[uuid.UUID] = mapped_column(
         PGUUID(as_uuid=True),
         ForeignKey("prompt_versions.id", ondelete="CASCADE"),
-        nullable=True,
+        nullable=False,
     )
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, server_default=text("'pending'")

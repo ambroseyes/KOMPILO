@@ -1,114 +1,43 @@
 """Pipeline stages.
 
-``understand`` is a real implementation: it turns the raw intent into a validated
-``UnderstandResult`` via a forced-tool LLM call. The remaining stages are still
-STUB placeholders (clearly marked) so the end-to-end pipeline stays runnable and
-testable until each is implemented for real.
+``understand`` is REAL: it turns the raw intent into a validated ``Catr`` via
+``app.engines.understand.understand`` — a Claude-backed analysis when a provider is
+configured (``claude-v1``), otherwise a deterministic heuristic (``heuristic-v1``).
+The remaining stages are still STUB placeholders (clearly marked) so the end-to-end
+pipeline stays runnable and testable until each is implemented for real.
 """
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
-from pydantic import ValidationError
-
-from app.core.config import settings
 from app.engines.base import PipelineContext, Stage, StageResult
-from app.engines.llm.base import LLMClient, LLMError
-from app.engines.prompts.understand import (
-    TOOL_DESCRIPTION,
-    TOOL_NAME,
-    build_system_prompt,
-    build_user_message,
-)
-from app.schemas.understand import AmbiguitySeverity, UnderstandCore, UnderstandResult
+from app.engines.understand import understand
 from app.telemetry.logging import get_logger
 
 logger = get_logger(__name__)
-from app.engines.understand import analyze_intent
 
 _STUB_NOTE = "STUB — placeholder output, not real reasoning."
-_UNDERSTAND_NOTE = "Deterministic heuristic analysis (heuristic-v1); not an LLM."
-
-# Base for the exponential backoff between retries (seconds); small so tests stay fast.
-_BACKOFF_BASE_S = 0.1
+_METHOD_NOTE = {
+    "heuristic-v1": "Deterministic heuristic analysis (heuristic-v1); not an LLM.",
+    "claude-v1": "Claude-backed analysis (claude-v1).",
+}
 
 
 class UnderstandStage(Stage):
-    """Analyse the intent into a validated understanding via a forced tool call."""
-    """REAL (heuristic) — turns the intent into a CATR via ``analyze_intent``."""
+    """REAL — turns the intent into a CATR via ``understand`` (LLM or heuristic)."""
 
     name = "understand"
-
-    def __init__(self, llm: LLMClient | None) -> None:
-        self._llm = llm
 
     async def run(self, ctx: PipelineContext) -> StageResult:
         intent = ctx.intent.strip()
         if not intent:
             return StageResult(self.name, "error", "empty intent", is_stub=False)
-        if self._llm is None:
-            return StageResult(self.name, "error", "no LLM provider configured", is_stub=False)
-
-        system = build_system_prompt()
-        user = build_user_message(intent, ctx.context)
-        schema = UnderstandCore.model_json_schema()
-        attempts = settings.llm_max_retries + 1
-        last_error: Exception | None = None
-
-        for attempt in range(attempts):
-            try:
-                call = await self._llm.emit_tool(
-                    system=system,
-                    user=user,
-                    tool_name=TOOL_NAME,
-                    tool_description=TOOL_DESCRIPTION,
-                    input_schema=schema,
-                    model=settings.understand_model,
-                    max_tokens=settings.llm_max_tokens,
-                    temperature=0.0,
-                )
-                core = UnderstandCore.model_validate(call.arguments)
-            except (LLMError, ValidationError) as exc:
-                last_error = exc
-                logger.warning("understand attempt %d/%d failed: %s", attempt + 1, attempts, exc)
-                if attempt + 1 < attempts:
-                    await asyncio.sleep(_BACKOFF_BASE_S * (2**attempt))
-                continue
-
-            result = self._finalize(core, model=call.model, usage=call.usage)
-            output = result.model_dump(mode="json")
-            ctx.artifacts[self.name] = output
-            return StageResult(self.name, "ok", "understanding produced", output, is_stub=False)
-
-        return StageResult(
-            self.name,
-            "error",
-            f"understand failed after {attempts} attempts: {last_error}",
-            is_stub=False,
-        )
-
-    def _finalize(
-        self, core: UnderstandCore, *, model: str, usage: dict[str, int]
-    ) -> UnderstandResult:
-        """Derive needs_clarification deterministically and attach provenance."""
-        needs_clarification = (
-            any(a.severity is AmbiguitySeverity.HIGH for a in core.ambiguities)
-            or core.confidence < settings.understand_confidence_threshold
-        )
-        return UnderstandResult.model_validate(
-            {
-                **core.model_dump(),
-                "needs_clarification": needs_clarification,
-                "model": model,
-                "usage": usage,
-            }
-        )
-        catr = analyze_intent(ctx.intent, ctx.context)
+        catr = await understand(intent, ctx.context)
         output = catr.model_dump()
         ctx.artifacts[self.name] = output
-        return StageResult(self.name, "ok", _UNDERSTAND_NOTE, output)
+        note = _METHOD_NOTE.get(catr.method, f"understand ({catr.method})")
+        return StageResult(self.name, "ok", note, output, is_stub=False)
 
 
 class StrategizeStage(Stage):
@@ -174,10 +103,10 @@ class ImproveStage(Stage):
         return StageResult(self.name, "skipped", _STUB_NOTE, output)
 
 
-def build_default_stages(llm: LLMClient | None) -> list[Stage]:
-    """Canonical ordered pipeline, with the LLM client injected into understand."""
+def build_default_stages() -> list[Stage]:
+    """Canonical ordered pipeline."""
     return [
-        UnderstandStage(llm),
+        UnderstandStage(),
         StrategizeStage(),
         CompileStage(),
         RouteStage(),

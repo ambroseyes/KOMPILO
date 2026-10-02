@@ -33,9 +33,9 @@ async def test_health_reports_version_and_db() -> None:
 
 @pytest.mark.asyncio
 async def test_pipeline_runs_all_stages_understand_real() -> None:
-    """The pipeline runs end-to-end key-less (EchoLLMClient): understand is real,
-    later stages are still STUB. (The /compile route itself is auth-gated — see
-    tests/test_compile.py.)"""
+    """The pipeline runs end-to-end key-less (heuristic understand): understand is
+    real, later stages are still STUB. (The /compile route itself is auth-gated —
+    see tests/test_compile.py.)"""
     from app.engines.pipeline import build_default_pipeline
 
     ctx = await build_default_pipeline().run("ship a feature")

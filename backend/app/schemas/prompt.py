@@ -2,21 +2,14 @@
 
 A ``Prompt`` lives inside a ``Project`` (``project_id`` comes from the URL path,
 never the body). A ``PromptVersion`` is an append-only, monotonically-numbered
-snapshot of a prompt: the ``version`` number is allocated server-side, and
-``prompt_id`` / ``tenant_id`` / ``author_id`` are all derived from context, never
-from the client (see the ``kompilo-rls`` / ``kompilo-crud`` skills).
+snapshot: ``version`` is allocated server-side, and ``prompt_id`` / ``tenant_id`` /
+``author_id`` are derived from context, never from the client (see the
+``kompilo-rls`` / ``kompilo-crud`` skills).
 
-The pipeline payloads (``catr``, ``ir``, ``renders``, ``diagnostics``) are opaque
-JSON objects for now; their shape is formalized when the real ``understand`` stage
-lands. They are optional so a version can be created before the pipeline fills it.
-"""Prompt and PromptVersion API schemas.
-
-``tenant_id`` and ``project_id``/``prompt_id`` are NEVER taken from the request
-body — they come from the authenticated tenant and the URL path (see kompilo-rls).
-
-Prompt VERSIONS are immutable: there is no update schema for them. A new revision
-is created as a new version (``version`` is server-assigned and monotonic per
-prompt); the version's ``content`` never changes once written.
+A version carries its immutable ``content`` (the versioned prompt source) and,
+optionally, the raw ``source_intent`` the ``understand`` stage analyzes into
+``catr``. The pipeline payloads (``catr``, ``ir``, ``renders``, ``diagnostics``)
+are opaque JSON, optional so a version can be created before the pipeline fills them.
 """
 
 from __future__ import annotations
@@ -26,7 +19,6 @@ from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from pydantic import BaseModel, ConfigDict, Field
 
 _SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]*$"
 
@@ -50,12 +42,6 @@ class PromptUpdate(BaseModel):
         if value is None:
             raise ValueError("name cannot be null; omit it to leave it unchanged")
         return value
-    description: str | None = None
-
-
-class PromptUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    description: str | None = None
 
 
 class PromptRead(BaseModel):
@@ -72,21 +58,21 @@ class PromptRead(BaseModel):
     updated_at: datetime
 
 
-# ── PromptVersion ────────────────────────────────────────────────────────────
+# ── PromptVersion (immutable, append-only) ─────────────────────────────────────
 class PromptVersionCreate(BaseModel):
-    # ``version`` is server-allocated (monotonic per prompt) — never client-set.
-    # ``source_intent`` is the raw human text the `understand` stage analyzes.
+    """Create a new immutable version. ``version`` is assigned by the server.
+
+    ``content`` is the versioned source (required, immutable). ``source_intent`` is
+    the optional raw human text the ``understand`` stage analyzes into ``catr``.
+    """
+
+    content: str = Field(..., min_length=1)
     source_intent: str | None = Field(default=None, max_length=10_000)
+    model_target: str | None = Field(default=None, max_length=100)
     catr: dict[str, Any] | None = None
     ir: dict[str, Any] | None = None
     renders: dict[str, Any] | None = None
     diagnostics: dict[str, Any] | None = None
-# ── PromptVersion (immutable) ────────────────────────────────────────────────
-class PromptVersionCreate(BaseModel):
-    """Create a new immutable version. ``version`` is assigned by the server."""
-
-    content: str = Field(..., min_length=1)
-    model_target: str | None = Field(default=None, max_length=100)
 
 
 class PromptVersionRead(BaseModel):
@@ -96,13 +82,8 @@ class PromptVersionRead(BaseModel):
     tenant_id: uuid.UUID
     prompt_id: uuid.UUID
     version: int
-    source_intent: str | None
-    catr: dict[str, Any] | None
-    ir: dict[str, Any] | None
-    renders: dict[str, Any] | None
-    diagnostics: dict[str, Any] | None
-    model_target: str | None
     content: str
+    source_intent: str | None
     model_target: str | None
     catr: Any | None
     ir: Any | None

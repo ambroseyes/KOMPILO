@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from app.engines.base import PipelineContext, Stage, StageResult
-from app.engines.llm import LLMClient, get_llm_client
 from app.engines.stages import build_default_stages
 from app.telemetry.logging import get_logger
 
@@ -30,10 +29,9 @@ class Pipeline:
         return ctx
 
 
-def build_default_pipeline(llm: LLMClient | None = None) -> Pipeline:
-    """Build the canonical pipeline, resolving the LLM client from settings."""
-    client = llm if llm is not None else get_llm_client()
-    return Pipeline(build_default_stages(client))
+def build_default_pipeline() -> Pipeline:
+    """Build the canonical pipeline."""
+    return Pipeline(build_default_stages())
 
 
 # Shared default instance.

@@ -3,14 +3,8 @@
 ``tenant_id`` and ``created_by`` are server-derived from the authenticated user,
 never accepted from the client (see the ``kompilo-rls`` / ``kompilo-crud`` skills).
 ``slug`` is immutable after creation — it is the project's stable handle — so it is
-absent from the update schema. ``team_id`` is intentionally not exposed yet: teams
-have no management endpoints, so accepting one would only produce a broken FK.
-"""Project API schemas.
-
-``tenant_id`` is intentionally ABSENT from create/update inputs — it is derived
-from the authenticated tenant, never from the client (see the kompilo-rls skill).
-``slug`` is immutable after creation (stable identity), so it is absent from the
-update schema.
+absent from the update schema. ``team_id`` is optional: teams have no management
+endpoints yet, but accepting a provided one keeps the field round-trippable.
 """
 
 from __future__ import annotations
@@ -20,9 +14,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-# Lowercase, digit/hyphen handle; must start with an alphanumeric.
-from pydantic import BaseModel, ConfigDict, Field
-
 _SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]*$"
 
 
@@ -30,6 +21,7 @@ class ProjectCreate(BaseModel):
     slug: str = Field(..., min_length=1, max_length=63, pattern=_SLUG_PATTERN)
     name: str = Field(..., min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=10_000)
+    team_id: uuid.UUID | None = None
 
 
 class ProjectUpdate(BaseModel):
@@ -42,23 +34,16 @@ class ProjectUpdate(BaseModel):
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = Field(default=None, max_length=10_000)
+    team_id: uuid.UUID | None = None
 
     @field_validator("name")
     @classmethod
     def _forbid_null_name(cls, value: str | None) -> str | None:
-        # Only runs when ``name`` is present in the payload (validate_default=False),
-        # so omitting it still means "leave unchanged".
+        # Only runs when ``name`` is present in the payload, so omitting it still
+        # means "leave unchanged".
         if value is None:
             raise ValueError("name cannot be null; omit it to leave it unchanged")
         return value
-    description: str | None = None
-    team_id: uuid.UUID | None = None
-
-
-class ProjectUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    description: str | None = None
-    team_id: uuid.UUID | None = None
 
 
 class ProjectRead(BaseModel):

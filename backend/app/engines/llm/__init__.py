@@ -17,7 +17,7 @@ from app.engines.llm.base import (
     LLMTimeout,
     LLMToolCall,
 )
-from app.engines.llm.fake import EchoLLMClient, FakeLLMClient
+from app.engines.llm.fake import FakeLLMClient
 from app.telemetry.logging import get_logger
 
 logger = get_logger(__name__)
@@ -29,7 +29,6 @@ __all__ = [
     "LLMTimeout",
     "LLMBadOutput",
     "FakeLLMClient",
-    "EchoLLMClient",
     "get_llm_client",
 ]
 
@@ -37,12 +36,10 @@ __all__ = [
 def get_llm_client(settings: Settings | None = None) -> LLMClient | None:
     """Return the configured LLM client, or ``None`` when none is available.
 
-    - A configured Anthropic key: the real client (wired in a later change; until
-      then the :class:`EchoLLMClient` stands in, logging a warning).
-    - No key, non-production: the :class:`EchoLLMClient`, so dev and CI run
-      key-less end-to-end without faking a real analysis.
-    - No key, production: ``None`` — the understand stage then errors explicitly
-      rather than returning an invented understanding.
+    - A configured Anthropic key: the real :class:`AnthropicClient` (``claude-v1``).
+    - No key: ``None`` — the caller (``understand``) then uses the deterministic
+      heuristic analyzer. No client ever stands in for a real analysis, so the
+      ``Catr.method`` marker is always truthful.
     """
     cfg = settings or default_settings
     if cfg.anthropic_api_key:
@@ -50,7 +47,4 @@ def get_llm_client(settings: Settings | None = None) -> LLMClient | None:
         from app.engines.llm.anthropic_client import AnthropicClient
 
         return AnthropicClient(cfg.anthropic_api_key, timeout_s=cfg.llm_timeout_s)
-    if cfg.is_production:
-        logger.error("No LLM provider configured in production; understand will error.")
-        return None
-    return EchoLLMClient()
+    return None
