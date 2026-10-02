@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 export interface Health {
   status: string;
@@ -112,11 +112,68 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+// ── Execute (authenticated) ──────────────────────────────────────────────────────
+export interface ExecuteActualCost {
+  actual: boolean;
+  currency: string;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+}
+
+export interface ExecuteMetadata {
+  provider: string;
+  provider_is_real: boolean;
+  model: string | null;
+  actual_cost: ExecuteActualCost;
+  latency_ms: number;
+  cached: boolean;
+  idempotent_replay: boolean;
+  note: string | null;
+}
+
+export interface VerificationIssue {
+  kind: string;
+  detail: string;
+  path: string | null;
+}
+
+export interface VerificationReport {
+  valid: boolean;
+  format: string;
+  issues: VerificationIssue[];
+  summary: string;
+}
+
+export interface ExecuteResponse {
+  execution_id: string | null;
+  status: string;
+  output: string;
+  steps: unknown[];
+  questions: string[];
+  metadata: ExecuteMetadata | null;
+  verification: VerificationReport | null;
+}
+
+export interface ExecuteRequest {
+  task: string;
+  mode?: CompileMode;
+  output_format?: string;
+  target_model?: string;
+  quality_contract?: string[];
+}
+
 export const api = {
   health: () => request<Health>("/v1/health"),
   compile: (req: CompileRequest) =>
     request<CompileResponse>("/v1/compile", {
       method: "POST",
       body: JSON.stringify(req),
+    }),
+  execute: (req: ExecuteRequest, token: string) =>
+    request<ExecuteResponse>("/v1/execute", {
+      method: "POST",
+      body: JSON.stringify(req),
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     }),
 };

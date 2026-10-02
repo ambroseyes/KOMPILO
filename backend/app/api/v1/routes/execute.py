@@ -20,6 +20,7 @@ from app.core.redis import get_redis
 from app.engines.executor import Executor
 from app.engines.gateway import GatewayError
 from app.engines.kompilo_core import KompiloCore
+from app.engines.verifier import verify_output
 from app.models.execution import Execution
 from app.models.execution_step import ExecutionStep
 from app.models.prompt import PromptVersion
@@ -30,6 +31,7 @@ from app.schemas.execute import (
     ExecuteStepResult,
     RealCost,
 )
+from app.schemas.verify import VerificationReport
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -74,6 +76,8 @@ async def _replay(db: AsyncSession, execution_id: uuid.UUID) -> ExecuteResponse 
         if meta_raw
         else None
     )
+    verif_raw = out.get("verification")
+    verification = VerificationReport.model_validate(verif_raw) if verif_raw else None
     return ExecuteResponse(
         execution_id=execution.id,
         status=execution.status,
@@ -81,6 +85,7 @@ async def _replay(db: AsyncSession, execution_id: uuid.UUID) -> ExecuteResponse 
         steps=await _steps_response(db, execution.id),
         questions=[],
         metadata=metadata,
+        verification=verification,
     )
 
 
@@ -204,8 +209,17 @@ async def execute_task(
         cached=outcome.cached_any,
         note=note,
     )
+    verification = verify_output(
+        outcome.output,
+        output_format=payload.output_format,
+        output_schema=payload.output_schema,
+    )
     execution.status = "succeeded"
-    execution.output = {"text": outcome.output, "metadata": metadata.model_dump()}
+    execution.output = {
+        "text": outcome.output,
+        "metadata": metadata.model_dump(),
+        "verification": verification.model_dump(),
+    }
     execution.finished_at = func.now()
     await db.flush()
 
@@ -224,4 +238,5 @@ async def execute_task(
         steps=await _steps_response(db, execution.id),
         questions=[],
         metadata=metadata,
+        verification=verification,
     )

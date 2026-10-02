@@ -25,12 +25,15 @@ execution strategy:
 └── docker-compose.yml    # postgres(pgvector) · redis · backend · worker · frontend
 ```
 
-> **Status:** project skeleton. The **`understand`** stage is now a real
-> deterministic analyzer (heuristic, `method="heuristic-v1"` — not an LLM); the
-> remaining pipeline stages are still **STUB** (the `/v1/compile` response carries
-> `is_stub: true` for the pipeline as a whole, but the `understand` trace entry is
-> no longer marked STUB). The surrounding architecture — database, multi-tenant RLS
-> isolation, migrations, async ARQ workers, tooling — is real, not mocked.
+> **Status:** the pipeline is live end to end. `understand` (heuristic Intent
+> Engine, `method="heuristic-v1"`), `strategize` (ambiguity · complexity · strategy ·
+> routing), `compile` (deterministic Prompt Compiler), and now **real execution** —
+> a model **Gateway** (semantic Redis cache, retries/fallback, real token cost), an
+> **Executor** that journals each step, **SSE streaming**, and an output **Verifier** —
+> are all real. When no `OPENAI_API_KEY` is set, execution runs through a deterministic
+> **offline Echo STUB** that is always flagged (`provider_is_real=false`); nothing
+> stubbed is ever presented as real. The surrounding architecture — database,
+> multi-tenant RLS isolation, migrations, async ARQ workers, tooling — is real too.
 
 ## Prerequisites
 
@@ -99,13 +102,19 @@ The exact checks (commands + expected results) are in the task summary and below
    Expected: `{"status": "ok", "version": "0.1.0", "db": "ok"}` (db `ko` if the
    database is unreachable).
 
-4. **Compile pipeline (STUB)**
+4. **Compile pipeline (Kompilo Core — deterministic)**
    ```bash
    curl -s -X POST http://localhost:8000/v1/compile \
         -H 'Content-Type: application/json' \
-        -d '{"intent":"ship a feature"}' | python3 -m json.tool
+        -d '{"task":"Rédige un message de bienvenue chaleureux pour un nouveau client",
+             "mode":"professional"}' | python3 -m json.tool
    ```
-   Expected: `is_stub: true` and a `trace` of 8 stages.
+   Expected: `understood{objective, domain}` first, then (when the task is clear enough to
+   proceed) `execution_plan`, `compiled_prompt`, `renders` (compact/professional/expert),
+   a multi-dimensional `diagnostics`, and `metadata.engine:"kompilo-core-v1"` with
+   `deterministic:true` and `costs_estimated:true` (costs here are **estimated**; real
+   costs come from `/v1/execute`, step 12). An ambiguous task returns `questions` instead
+   and leaves `execution_plan/compiled_prompt/renders` null. See the `kompilo-compile` skill.
 
 5. **OpenAPI docs** — open http://localhost:8000/docs
 
@@ -238,6 +247,75 @@ The exact checks (commands + expected results) are in the task summary and below
     Edit the YAML to add/retune models — never the routing code — and keep `last_verified`
     fresh. See the `kompilo-strategize` skill.
 
+12. **Execute a plan (REAL cost · semantic cache · idempotency)** — reuse `$TOKEN` from
+    step 8. `/v1/execute` compiles the task, runs each step through the **Gateway**, and
+    returns the output plus **real** cost/latency metadata. With no `OPENAI_API_KEY` it
+    uses the offline Echo STUB (`provider_is_real:false`) — the flow is identical, the
+    cost is tiny but real (tokens × registry price).
+    ```bash
+    # First call — runs the plan (cached:false, a real non-zero cost):
+    curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' \
+         -d '{"task":"Rédige un message de bienvenue chaleureux pour un nouveau client"}' \
+         | python3 -m json.tool
+    # Second IDENTICAL call — served by the semantic cache (cached:true, cost 0):
+    curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' \
+         -d '{"task":"Rédige un message de bienvenue chaleureux pour un nouveau client"}' \
+         | python3 -m json.tool
+    ```
+    Expected: the **first** response has `metadata.cached:false` and
+    `metadata.actual_cost.cost_usd > 0` (and `actual:true`); the **second**, identical,
+    has `metadata.cached:true` and `cost_usd:0` — **the 2nd call is free**. The cache
+    fingerprint is `sha256(tenant + normalized request + json_mode)` (model-agnostic) and
+    is strictly tenant-scoped. Add an **`Idempotency-Key`** header to make a retry replay
+    the very same execution instead of running again:
+    ```bash
+    curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
+         -H 'Idempotency-Key: demo-key-123' -H 'Content-Type: application/json' \
+         -d '{"task":"Rédige un message de bienvenue chaleureux pour un nouveau client"}' \
+         | python3 -c "import sys,json;print(json.load(sys.stdin)['execution_id'])"
+    # Same key again → same execution_id (replayed, metadata.idempotent_replay:true).
+    ```
+    If the task is ambiguous (a CRITICAL is missing), `/v1/execute` does **not** run — it
+    returns `status:"needs_clarification"` with `questions` instead. No prompt or secret is
+    ever logged. See the `kompilo-gateway` skill.
+
+13. **Live streaming (SSE) + output Verifier** — stream an execution token by token.
+    ```bash
+    # Start an execution, capture its id:
+    EXEC=$(curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' \
+         -d '{"task":"Rédige un message de bienvenue chaleureux pour un nouveau client"}' \
+         | python3 -c "import sys,json;print(json.load(sys.stdin)['execution_id'])")
+    # Stream it over SSE. EventSource cannot set headers, so the token goes in the query:
+    curl -N "http://localhost:8000/v1/executions/$EXEC/stream?token=$TOKEN"
+    ```
+    Expected: an `text/event-stream` emitting `event: step`, then progressive
+    `event: token` chunks, then a terminal `event: done`. Without a token → **401**; an
+    unknown/foreign execution id (RLS) → **404**. The stream loads its data up front (no DB
+    session held open) and closes cleanly on client disconnect. In the UI, open
+    **http://localhost:5173**, compile a task, expand **« Exécution en direct (avancé) »**,
+    paste an `access_token`, and click **Exécuter en streaming** (hook:
+    `frontend/src/hooks/useExecutionStream.ts`).
+
+    **Verifier.** Every `/v1/execute` response carries a `verification` report. Request a
+    structured output and a schema to see it validate:
+    ```bash
+    curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' -d '{
+           "task":"Donne le profil d un client en JSON",
+           "output_format":"json",
+           "output_schema":{"required":["name","age"],
+                            "properties":{"name":{"type":"string"},"age":{"type":"integer"}}}
+         }' | python3 -c "import sys,json;print(json.load(sys.stdin)['verification'])"
+    ```
+    Expected: a `VerificationReport` with `valid` plus, when invalid, a precise list of
+    `issues[{kind, detail, path}]` (e.g. a missing `age` → `path:"age"`, kind
+    `missing_field`; a wrong type → kind `type_mismatch`) — never a bare pass/fail. The
+    JSON-Schema subset supported is `required` + property `type`, recursive into nested
+    objects and array items. See the `kompilo-gateway` skill.
+
 ---
 
 ## Architecture notes
@@ -248,6 +326,13 @@ The exact checks (commands + expected results) are in the task summary and below
   tenant-owned table has an `ENABLE`+`FORCE` RLS policy filtering by `tenant_id`, so
   tenants cannot read each other's rows. Migrations run as the superuser (`kompilo`),
   which owns the tables. See the `kompilo-rls` skill.
+- **Gateway (single exit point).** Every model call goes through
+  `backend/app/engines/gateway.py`: a semantic Redis cache (fingerprint =
+  `sha256(tenant + normalized request + json_mode)`, model-agnostic, tenant-scoped),
+  retries with backoff then fallback to the next routed model, and **real** cost from
+  `tokens × registry price`. It never logs the prompt or a secret. Providers sit behind
+  one `LLMProvider` interface (OpenAI / Ollama / LM Studio, or the offline Echo STUB).
+  See the `kompilo-gateway` skill.
 - **Secrets.** Never committed; everything flows through `.env` (git-ignored).
 - **STUB stages.** `backend/app/engines/stages.py` returns placeholder output
   until real reasoning is implemented. Nothing stubbed is presented as real.

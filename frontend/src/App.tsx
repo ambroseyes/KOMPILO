@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type CompileMode, type CompileResponse } from "./lib/api";
 import { CompileForm } from "./components/CompileForm";
+import { ExecutionPanel } from "./components/ExecutionPanel";
 import { ResultView } from "./components/ResultView";
 
 export default function App() {
@@ -55,6 +56,15 @@ export default function App() {
           )}
 
           {mutation.isSuccess && <ResultView data={mutation.data} />}
+
+          {mutation.isSuccess && mutation.data.questions.length === 0 && (
+            <details className="mt-4 rounded-2xl border border-kompilo-border bg-kompilo-panel p-5 sm:p-6">
+              <summary className="cursor-pointer list-none text-sm font-semibold text-slate-300 hover:text-white">
+                <span className="text-kompilo-blue-300">Exécution en direct</span> (avancé)
+              </summary>
+              <ExecutionPanel task={task} />
+            </details>
+          )}
         </div>
 
         <footer className="mt-12 text-center text-xs text-slate-600">

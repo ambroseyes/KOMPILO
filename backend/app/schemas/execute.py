@@ -8,10 +8,12 @@ ambiguous task the pipeline returns ``questions`` and does not execute.
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.compile import CompileMode
+from app.schemas.verify import VerificationReport
 
 
 class ExecuteRequest(BaseModel):
@@ -21,6 +23,8 @@ class ExecuteRequest(BaseModel):
     output_format: str = Field(default="markdown", max_length=100)
     quality_contract: list[str] = Field(default_factory=list)
     target_model: str | None = None
+    # Optional output contract: when output_format is "json", the result is validated.
+    output_schema: dict[str, Any] | None = None
 
     @model_validator(mode="after")
     def _one_source(self) -> ExecuteRequest:
@@ -75,3 +79,4 @@ class ExecuteResponse(BaseModel):
     steps: list[ExecuteStepResult]
     questions: list[str]
     metadata: ExecuteMetadata | None
+    verification: VerificationReport | None = None
