@@ -5,12 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 
-class HealthComponent(BaseModel):
-    name: str
-    ok: bool
-    detail: str | None = None
-
-
-class ReadinessResponse(BaseModel):
+class HealthResponse(BaseModel):
     status: str  # "ok" | "degraded"
-    components: list[HealthComponent]
+    version: str
+    db: str  # "ok" | "ko"

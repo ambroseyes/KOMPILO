@@ -154,9 +154,9 @@ tenant-scoped table should get an equivalent assertion.
 Quick manual check against a running stack (see repo README step 7):
 ```bash
 # As tenant A (dev header), list — must never contain tenant B's rows.
-curl -s localhost:8000/api/v1/me/pipeline-runs -H 'X-Tenant-ID: <A>'
+curl -s localhost:8000/v1/me/pipeline-runs -H 'X-Tenant-ID: <A>'
 # No tenant at all → 401 (fail-closed).
-curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/api/v1/me/pipeline-runs
+curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/v1/me/pipeline-runs
 ```
 
 ---

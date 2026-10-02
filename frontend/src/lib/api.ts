@@ -1,14 +1,9 @@
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
-export interface ReadinessComponent {
-  name: string;
-  ok: boolean;
-  detail?: string | null;
-}
-
-export interface Readiness {
+export interface Health {
   status: string;
-  components: ReadinessComponent[];
+  version: string;
+  db: string;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -23,5 +18,5 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  readiness: () => request<Readiness>("/api/v1/health/ready"),
+  health: () => request<Health>("/v1/health"),
 };

@@ -24,12 +24,16 @@ dependencies = [
 
 [project.optional-dependencies]
 # Dev tools are pinned so the quality gates are reproducible between local and CI.
+# ruff = linter, black = formatter (do NOT also enable ruff format — two
+# formatters conflict).
 dev = [
   "pytest>=9.1,<10",
   "pytest-asyncio>=1.4,<2",
   "httpx>=0.28,<0.29",
   "ruff==0.16.10",
-  "mypy==2.3.1",
+  "black==26.5.1",
+  "mypy==2.4.0",
+  "pre-commit>=4.6,<5",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -39,7 +43,12 @@ packages = ["app"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
 [tool.ruff]
+# Linting only — formatting is delegated to black.
 line-length = 100
 target-version = "py312"
 

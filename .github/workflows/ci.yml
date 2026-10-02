@@ -17,7 +17,7 @@ jobs:
         working-directory: backend
     env:
       # Settings are read at import time; these are throwaway CI values (no secrets).
-      SECRET_KEY: ci-dummy-secret-key-0123456789
+      JWT_SECRET: ci-dummy-secret-key-0123456789
       DATABASE_URL: postgresql+asyncpg://user:pass@localhost:5432/placeholder
     steps:
       - uses: actions/checkout@v4
@@ -32,8 +32,8 @@ jobs:
           pip install -e ".[dev]"
       - name: Ruff (lint)
         run: ruff check .
-      - name: Ruff (format)
-        run: ruff format --check .
+      - name: Black (format check)
+        run: black --check .
       - name: mypy (strict)
         run: mypy app
       - name: Unit tests (no external services)
@@ -55,7 +55,7 @@ jobs:
       PGHOST: localhost
       PGPORT: "5432"
       PGPASSWORD: kompilo_pw
-      SECRET_KEY: ci-dummy-secret-key-0123456789
+      JWT_SECRET: ci-dummy-secret-key-0123456789
       DATABASE_URL: postgresql+asyncpg://kompilo_app:app_pw@localhost:5432/kompilo
       ALEMBIC_DATABASE_URL: postgresql+asyncpg://kompilo:kompilo_pw@localhost:5432/kompilo
     services:

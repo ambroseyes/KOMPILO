@@ -76,13 +76,11 @@ def upgrade() -> None:
     # ── Row-Level Security on the tenant-scoped table ────────────────────────
     # Enforced for every non-owner, non-superuser role (i.e. the app role).
     op.execute("ALTER TABLE pipeline_runs ENABLE ROW LEVEL SECURITY")
-    op.execute(
-        """
+    op.execute("""
         CREATE POLICY tenant_isolation ON pipeline_runs
         USING (tenant_id = current_setting('app.current_tenant', true)::uuid)
         WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid)
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

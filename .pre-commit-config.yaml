@@ -1,0 +1,28 @@
+# Pre-commit hooks for Kompilo.
+#   pip install pre-commit   (or: pip install -e "backend[dev]")
+#   pre-commit install              # enable the git hook
+#   pre-commit run --all-files      # run on the whole tree
+#
+# Versions are pinned to match backend/pyproject.toml's dev tools so local hooks,
+# a developer's manual runs, and CI all behave identically.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.10
+    hooks:
+      - id: ruff            # lint (with autofix); formatting is black's job
+        args: [--fix]
+
+  - repo: https://github.com/psf/black
+    rev: 26.5.1
+    hooks:
+      - id: black
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict

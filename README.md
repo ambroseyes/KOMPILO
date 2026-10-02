@@ -42,11 +42,11 @@ execution strategy:
 
 ```bash
 cp .env.example .env
-python3 -c "import secrets; print('SECRET_KEY=' + secrets.token_urlsafe(48))"
+python3 -c "import secrets; print('JWT_SECRET=' + secrets.token_urlsafe(48))"
 ```
 
 Open `.env` and:
-- paste the generated value into `SECRET_KEY`,
+- paste the generated value into `JWT_SECRET`,
 - set strong values for `POSTGRES_PASSWORD` and `APP_DB_PASSWORD`,
 - make the passwords inside `DATABASE_URL` and `ALEMBIC_DATABASE_URL` match the two above.
 
@@ -85,19 +85,20 @@ The exact checks (commands + expected results) are in the task summary and below
 
 2. **Liveness**
    ```bash
-   curl -s http://localhost:8000/api/v1/health/live
+   curl -s http://localhost:8000/v1/health/live
    ```
    Expected: `{"status":"ok"}`
 
-3. **Readiness (DB + Redis)**
+3. **Health (status + version + db)**
    ```bash
-   curl -s http://localhost:8000/api/v1/health/ready | python3 -m json.tool
+   curl -s http://localhost:8000/v1/health | python3 -m json.tool
    ```
-   Expected: `status: "ok"` with `postgres` and `redis` both `ok: true`.
+   Expected: `{"status": "ok", "version": "0.1.0", "db": "ok"}` (db `ko` if the
+   database is unreachable).
 
 4. **Compile pipeline (STUB)**
    ```bash
-   curl -s -X POST http://localhost:8000/api/v1/compile \
+   curl -s -X POST http://localhost:8000/v1/compile \
         -H 'Content-Type: application/json' \
         -d '{"intent":"ship a feature"}' | python3 -m json.tool
    ```
@@ -105,16 +106,16 @@ The exact checks (commands + expected results) are in the task summary and below
 
 5. **OpenAPI docs** — open http://localhost:8000/docs
 
-6. **Frontend** — open http://localhost:5173 (shows Kompilo + backend status: postgres/redis green)
+6. **Frontend** — open http://localhost:5173 (shows Kompilo + backend health: status/db/version)
 
 7. **Tenant isolation (RLS) quick check**
    ```bash
    # Create a dev tenant, grab its id:
-   curl -s -X POST http://localhost:8000/api/v1/tenants \
+   curl -s -X POST http://localhost:8000/v1/tenants \
         -H 'Content-Type: application/json' \
         -d '{"slug":"acme","name":"Acme"}' | python3 -m json.tool
    # List runs scoped to that tenant (empty list, RLS-filtered):
-   curl -s http://localhost:8000/api/v1/me/pipeline-runs \
+   curl -s http://localhost:8000/v1/me/pipeline-runs \
         -H 'X-Tenant-ID: <paste-tenant-id>'
    ```
    Expected: tenant created; the scoped list returns `[]` (and 401 without a tenant).
@@ -143,8 +144,8 @@ cd backend && pip install -e ".[dev]" && pytest
 docker compose exec backend alembic revision --autogenerate -m "describe change"
 docker compose exec backend alembic upgrade head
 
-# Lint / type-check
-cd backend && ruff check . && mypy app
+# Lint / format / type-check
+cd backend && ruff check . && black --check . && mypy app
 
 # Frontend production build
 cd frontend && npm run build
@@ -154,7 +155,7 @@ cd frontend && npm run build
 
 `.github/workflows/ci.yml` runs on every push and pull request:
 
-- **backend-quality** — `ruff check`, `ruff format --check`, `mypy --strict`, unit tests.
+- **backend-quality** — `ruff check` (lint), `black --check` (format), `mypy --strict`, unit tests.
 - **backend-integration** — spins up PostgreSQL (pgvector), runs the real
   `infra/postgres/init/01-init.sh`, applies migrations as the superuser, then runs
   the RLS isolation tests as the least-privilege app role.

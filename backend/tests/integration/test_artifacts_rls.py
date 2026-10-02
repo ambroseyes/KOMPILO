@@ -55,7 +55,7 @@ async def test_artifacts_crud_and_isolation() -> None:
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             # A creates an artifact.
             created = await client.post(
-                "/api/v1/artifacts",
+                "/v1/artifacts",
                 headers={"X-Tenant-ID": tid_a},
                 json={"name": "strat-1", "kind": "strategy", "content": {"k": 1}},
             )
@@ -64,23 +64,19 @@ async def test_artifacts_crud_and_isolation() -> None:
             assert created.json()["tenant_id"] == tid_a
 
             # A sees exactly its artifact; B sees none.
-            list_a = await client.get("/api/v1/artifacts", headers={"X-Tenant-ID": tid_a})
-            list_b = await client.get("/api/v1/artifacts", headers={"X-Tenant-ID": tid_b})
+            list_a = await client.get("/v1/artifacts", headers={"X-Tenant-ID": tid_a})
+            list_b = await client.get("/v1/artifacts", headers={"X-Tenant-ID": tid_b})
             assert [x["id"] for x in list_a.json()] == [art_id]
             assert list_b.json() == []
 
             # B cannot read A's artifact by id → 404 (RLS invisibility).
-            get_b = await client.get(f"/api/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_b})
+            get_b = await client.get(f"/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_b})
             assert get_b.status_code == 404
 
             # B cannot delete A's artifact → 404; A can → 204.
-            del_b = await client.delete(
-                f"/api/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_b}
-            )
+            del_b = await client.delete(f"/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_b})
             assert del_b.status_code == 404
-            del_a = await client.delete(
-                f"/api/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_a}
-            )
+            del_a = await client.delete(f"/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_a})
             assert del_a.status_code == 204
     finally:
         # Cleanup: deleting tenants cascades to artifacts.

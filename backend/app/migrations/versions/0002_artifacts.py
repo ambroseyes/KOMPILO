@@ -56,13 +56,11 @@ def upgrade() -> None:
 
     # ── Row-Level Security (tenant isolation) ────────────────────────────────
     op.execute("ALTER TABLE artifacts ENABLE ROW LEVEL SECURITY")
-    op.execute(
-        """
+    op.execute("""
         CREATE POLICY tenant_isolation ON artifacts
         USING      (tenant_id = current_setting('app.current_tenant', true)::uuid)
         WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid)
-        """
-    )
+        """)
 
 
 def downgrade() -> None:

@@ -24,10 +24,11 @@ class Settings(BaseSettings):
     app_name: str = "Kompilo"
     environment: str = "development"
     log_level: str = "INFO"
-    api_v1_prefix: str = "/api/v1"
+    api_v1_prefix: str = "/v1"
 
     # ── Security ─────────────────────────────────────────────────────
-    secret_key: str = Field(..., min_length=16)
+    # Read from the JWT_SECRET environment variable (never hardcoded).
+    jwt_secret: str = Field(..., min_length=16)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     # Stored as a comma-separated string (avoids pydantic-settings JSON parsing);
@@ -42,6 +43,11 @@ class Settings(BaseSettings):
 
     # ── Redis / ARQ ──────────────────────────────────────────────────
     redis_url: str = "redis://redis:6379/0"
+
+    # ── LLM providers (optional; read from the env, never hardcoded) ──
+    # Kompilo targets Claude; keys are only required once real stages call out.
+    anthropic_api_key: str | None = None
+    openai_api_key: str | None = None
 
     @property
     def cors_origins_list(self) -> list[str]:
