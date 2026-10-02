@@ -5,6 +5,12 @@ never accepted from the client (see the ``kompilo-rls`` / ``kompilo-crud`` skill
 ``slug`` is immutable after creation — it is the project's stable handle — so it is
 absent from the update schema. ``team_id`` is intentionally not exposed yet: teams
 have no management endpoints, so accepting one would only produce a broken FK.
+"""Project API schemas.
+
+``tenant_id`` is intentionally ABSENT from create/update inputs — it is derived
+from the authenticated tenant, never from the client (see the kompilo-rls skill).
+``slug`` is immutable after creation (stable identity), so it is absent from the
+update schema.
 """
 
 from __future__ import annotations
@@ -15,6 +21,8 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Lowercase, digit/hyphen handle; must start with an alphanumeric.
+from pydantic import BaseModel, ConfigDict, Field
+
 _SLUG_PATTERN = r"^[a-z0-9][a-z0-9-]*$"
 
 
@@ -43,6 +51,14 @@ class ProjectUpdate(BaseModel):
         if value is None:
             raise ValueError("name cannot be null; omit it to leave it unchanged")
         return value
+    description: str | None = None
+    team_id: uuid.UUID | None = None
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    team_id: uuid.UUID | None = None
 
 
 class ProjectRead(BaseModel):

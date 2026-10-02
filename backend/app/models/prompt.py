@@ -66,6 +66,11 @@ class PromptVersion(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDelete
     # Raw human intent this version compiles from — the input the `understand`
     # stage analyzes into `catr`. Nullable until supplied.
     source_intent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Immutable source of this version: once a version is created its ``content``
+    # and ``version`` never change — a new revision means a brand-new version row.
+    # (The pipeline MAY later fill the JSONB outputs below; those are derived, not
+    # the versioned source.)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
     catr: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
     ir: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
     renders: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
