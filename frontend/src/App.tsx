@@ -1,50 +1,66 @@
-import { useQuery } from "@tanstack/react-query";
-import { api } from "./lib/api";
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { api, type CompileMode, type CompileResponse } from "./lib/api";
+import { CompileForm } from "./components/CompileForm";
+import { ResultView } from "./components/ResultView";
 
 export default function App() {
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["health"],
-    queryFn: api.health,
+  const [task, setTask] = useState("");
+  const [mode, setMode] = useState<CompileMode>("professional");
+
+  const mutation = useMutation<CompileResponse, Error, void>({
+    mutationFn: () => api.compile({ task: task.trim(), mode }),
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900/60 p-8 shadow-xl">
-        <h1 className="text-3xl font-bold tracking-tight">Kompilo</h1>
-        <p className="mt-1 text-sm text-slate-400">AI Execution Intelligence</p>
+    <div className="min-h-screen">
+      <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-16">
+        <header className="mb-8">
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            Kompilo<span className="text-kompilo-blue">.</span>
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            AI Execution Intelligence — transforme une intention en stratégie d'exécution.
+          </p>
+        </header>
 
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-            Backend health
-          </h2>
+        <CompileForm
+          value={task}
+          onChange={setTask}
+          mode={mode}
+          onModeChange={setMode}
+          onSubmit={() => mutation.mutate()}
+          isPending={mutation.isPending}
+        />
 
-          {isLoading && <p className="mt-2 text-slate-300">Checking…</p>}
-
-          {isError && (
-            <p className="mt-2 text-red-400">Unreachable: {(error as Error).message}</p>
+        {/* Live region so screen readers announce state changes. */}
+        <div className="mt-6" aria-live="polite" aria-busy={mutation.isPending}>
+          {mutation.isPending && (
+            <div className="rounded-2xl border border-kompilo-border bg-kompilo-panel p-6 text-slate-300">
+              <span className="inline-flex items-center gap-2">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-kompilo-blue" />
+                Compilation en cours…
+              </span>
+            </div>
           )}
 
-          {data && (
-            <ul className="mt-3 space-y-2">
-              <li className="flex items-center gap-2">
-                <span className={data.status === "ok" ? "text-emerald-400" : "text-amber-400"}>
-                  {data.status === "ok" ? "●" : "○"}
-                </span>
-                <span className="text-slate-300">status</span>
-                <span className="text-slate-400">{data.status}</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className={data.db === "ok" ? "text-emerald-400" : "text-red-400"}>
-                  {data.db === "ok" ? "●" : "○"}
-                </span>
-                <span className="text-slate-300">database</span>
-                <span className="text-slate-400">{data.db}</span>
-              </li>
-              <li className="text-xs text-slate-500">version {data.version}</li>
-            </ul>
+          {mutation.isError && (
+            <div
+              role="alert"
+              className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-red-200"
+            >
+              <p className="font-semibold">La compilation a échoué.</p>
+              <p className="mt-1 text-sm text-red-300/90">{mutation.error.message}</p>
+            </div>
           )}
+
+          {mutation.isSuccess && <ResultView data={mutation.data} />}
         </div>
-      </div>
+
+        <footer className="mt-12 text-center text-xs text-slate-600">
+          Kompilo · le cœur de compilation est déterministe · coûts affichés = estimés
+        </footer>
+      </main>
     </div>
   );
 }
