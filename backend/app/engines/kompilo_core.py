@@ -30,6 +30,7 @@ from app.schemas.compile import (
     ExecutionPlan,
     ExecutionStep,
     PromptRenders,
+    UnderstoodIntent,
 )
 from app.schemas.registry import ModelCapability
 from app.schemas.strategize import AmbiguityReport, ComplexityAssessment, Strategy
@@ -160,10 +161,12 @@ class KompiloCore:
         catr = await IntentEngine().run(task)
         ambiguity = AmbiguityEngine().analyze(catr)
         llm_used = catr.meta.enriched_by_llm
+        understood = UnderstoodIntent(objective=catr.objective, domain=catr.domain)
 
         # ── ASK branch: stop before planning; return the critical questions. ─────────
         if ambiguity.decision == "ASK":
             return CompileResponse(
+                understood=understood,
                 execution_plan=None,
                 compiled_prompt=None,
                 renders=None,
@@ -220,6 +223,7 @@ class KompiloCore:
             )
 
         return CompileResponse(
+            understood=understood,
             execution_plan=plan,
             compiled_prompt=compiled,
             renders=renders,

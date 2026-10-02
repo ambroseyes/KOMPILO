@@ -93,6 +93,15 @@ class DiagnosticDimension(BaseModel):
 
 
 # ── Metadata + response ─────────────────────────────────────────────────────────────
+class UnderstoodIntent(BaseModel):
+    """What Kompilo understood from the task (shown first, in ASK and PROCEED alike)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    objective: str
+    domain: str
+
+
 class CompileMetadata(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -107,6 +116,7 @@ class CompileMetadata(BaseModel):
 class CompileResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    understood: UnderstoodIntent
     # execution_plan / compiled_prompt / renders are null when clarification is needed
     # (decision == ASK): the pipeline stops after the ambiguity check.
     execution_plan: ExecutionPlan | None

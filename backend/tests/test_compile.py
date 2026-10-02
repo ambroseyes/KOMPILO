@@ -29,6 +29,10 @@ async def test_compile_proceeds_on_clear_task() -> None:
     assert resp.status_code == 200, resp.text
     body = resp.json()
 
+    # "Understood" is always present (shown first in the UI).
+    assert body["understood"]["objective"]
+    assert body["understood"]["domain"]
+
     # PROCEED: no questions, a full plan and a compiled prompt.
     assert body["questions"] == []
     assert body["execution_plan"] is not None
@@ -58,6 +62,7 @@ async def test_compile_asks_on_vague_task() -> None:
     resp = await _post({"task": "truc"})
     assert resp.status_code == 200, resp.text
     body = resp.json()
+    assert body["understood"]["objective"]  # still present on ASK
     assert body["questions"]  # at least one clarifying question
     assert body["compiled_prompt"] is None
     assert body["execution_plan"] is None
