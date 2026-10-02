@@ -20,6 +20,7 @@ dependencies = [
   "pgvector>=0.3,<1.0",
   "pyjwt>=2.15,<3",
   "bcrypt>=4.1,<6",
+  "pyyaml>=6,<7",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +34,7 @@ dev = [
   "ruff==0.16.10",
   "black==26.5.1",
   "mypy==2.4.0",
+  "types-PyYAML>=6,<7",
   "pre-commit>=4.6,<5",
 ]
 

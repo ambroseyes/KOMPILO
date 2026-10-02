@@ -216,6 +216,28 @@ The exact checks (commands + expected results) are in the task summary and below
     with a key, a low-confidence (vague) phrase triggers one LLM call to refine the
     objective/expected output (`meta.method:"heuristic-v1+llm"`).
 
+11. **Strategize stage (ambiguity · complexity · strategy · routing)** — consumes the CATR.
+    Runs inside the pipeline after `understand`; try the engines directly on any phrase:
+    ```bash
+    cd backend && python -c "import asyncio; \
+      from app.engines.intent import IntentEngine; from app.engines.ambiguity import AmbiguityEngine; \
+      from app.engines.complexity import ComplexityEngine; from app.engines.strategy import StrategyEngine; \
+      from app.engines.router import ModelRouter; \
+      c=asyncio.run(IntentEngine().run('VOTRE PHRASE')); x=ComplexityEngine().assess(c); s=StrategyEngine().decide(c,x); \
+      print(AmbiguityEngine().analyze(c).decision, x.level, s.kind, ModelRouter().route(c,s,x).primary)"
+    ```
+    Expected shape: a decision `ASK` (1–3 questions, only if a CRITICAL is missing) or
+    `PROCEED`; a complexity `simple|moderate|complex|agentic`; a strategy
+    `single|chain|rag`; and a primary model + fallbacks. Examples: a clear 1-liner →
+    `PROCEED simple single gpt-4o-mini`; `"truc"` → `ASK …`; a task citing a document →
+    `rag`; a 4-step agent task → `agentic chain claude-sonnet-5-5`.
+
+    **Model Capability Registry.** Model choices are driven by
+    `backend/app/engines/model_registry.yaml` (model, provider, context_window, tools,
+    vision, structured_output, reasoning_strength, cost, latency, **last_verified**).
+    Edit the YAML to add/retune models — never the routing code — and keep `last_verified`
+    fresh. See the `kompilo-strategize` skill.
+
 ---
 
 ## Architecture notes

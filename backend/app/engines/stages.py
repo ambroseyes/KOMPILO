@@ -10,8 +10,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.engines.ambiguity import AmbiguityEngine
 from app.engines.base import PipelineContext, Stage, StageResult
+from app.engines.complexity import ComplexityEngine
 from app.engines.intent import IntentEngine
+from app.engines.router import ModelRouter
+from app.engines.strategy import StrategyEngine
+from app.schemas.catr import CanonicalAITask
+from app.schemas.strategize import StrategizeResult
 
 _STUB_NOTE = "STUB — placeholder output, not real reasoning."
 
@@ -34,12 +40,33 @@ class UnderstandStage(Stage):
 
 
 class StrategizeStage(Stage):
+    """REAL — consumes the CATR and runs ambiguity → complexity → strategy → routing."""
+
     name = "strategize"
 
     async def run(self, ctx: PipelineContext) -> StageResult:
-        output = {"approach": "single-step", "candidates": 1}  # STUB
+        raw = ctx.artifacts.get("understand")
+        if not isinstance(raw, dict):
+            return StageResult(self.name, "error", "No CATR available from the understand stage.")
+        catr = CanonicalAITask.model_validate(raw)
+
+        ambiguity = AmbiguityEngine().analyze(catr)
+        complexity = ComplexityEngine().assess(catr)
+        strategy = StrategyEngine().decide(catr, complexity)
+        route = ModelRouter().route(catr, strategy, complexity)
+        result = StrategizeResult(
+            ambiguity=ambiguity, complexity=complexity, strategy=strategy, route=route
+        )
+        output = result.model_dump()
         ctx.artifacts[self.name] = output
-        return StageResult(self.name, "ok", _STUB_NOTE, output)
+
+        note = (
+            f"decision={ambiguity.decision}; complexity={complexity.level}; "
+            f"strategy={strategy.kind}; model={route.primary}"
+        )
+        if ambiguity.decision == "ASK":
+            note = "Clarification recommended before execution — " + note
+        return StageResult(self.name, "ok", note, output)
 
 
 class CompileStage(Stage):
