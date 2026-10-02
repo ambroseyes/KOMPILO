@@ -122,6 +122,20 @@ The exact checks (commands + expected results) are in the task summary and below
    ```
    Expected: org created; the scoped artifacts list returns `[]` (and 401 without a tenant).
 
+8. **Auth (register → login → token-scoped access)**
+   ```bash
+   # Register a user in that org (DEV bootstrap), then log in:
+   curl -s -X POST http://localhost:8000/v1/auth/register -H 'Content-Type: application/json' \
+        -d '{"org_slug":"acme","email":"you@acme.io","password":"s3cret-pass"}'
+   TOKEN=$(curl -s -X POST http://localhost:8000/v1/auth/login -H 'Content-Type: application/json' \
+        -d '{"org_slug":"acme","email":"you@acme.io","password":"s3cret-pass"}' \
+        | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+   # Use the token — tenant is derived from it, no X-Tenant-ID needed:
+   curl -s http://localhost:8000/v1/auth/me        -H "Authorization: Bearer $TOKEN"
+   curl -s http://localhost:8000/v1/artifacts      -H "Authorization: Bearer $TOKEN"
+   ```
+   Expected: user created; `/auth/me` returns it; artifact calls are scoped to the token's tenant.
+
 ---
 
 ## Architecture notes

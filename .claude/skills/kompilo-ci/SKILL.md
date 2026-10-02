@@ -62,9 +62,9 @@ PGHOST=localhost PGPASSWORD=pw POSTGRES_USER=kompilo POSTGRES_DB=kompilo \
   APP_DB_USER=kompilo_app APP_DB_PASSWORD=app_pw bash infra/postgres/init/01-init.sh
 ALEMBIC_DATABASE_URL=postgresql+asyncpg://kompilo:pw@localhost:5432/kompilo \
   DATABASE_URL=postgresql+asyncpg://kompilo_app:app_pw@localhost:5432/kompilo \
-  JWT_SECRET=ci-dummy-0123456789 alembic upgrade head
+  JWT_SECRET=ci-dummy-jwt-secret-0123456789ab alembic upgrade head
 DATABASE_URL=postgresql+asyncpg://kompilo_app:app_pw@localhost:5432/kompilo \
-  JWT_SECRET=ci-dummy-0123456789 pytest tests/integration -q
+  JWT_SECRET=ci-dummy-jwt-secret-0123456789ab pytest tests/integration -q
 docker rm -f ci-pg
 ```
 

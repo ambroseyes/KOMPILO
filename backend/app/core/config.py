@@ -28,7 +28,8 @@ class Settings(BaseSettings):
 
     # ── Security ─────────────────────────────────────────────────────
     # Read from the JWT_SECRET environment variable (never hardcoded).
-    jwt_secret: str = Field(..., min_length=16)
+    # >= 32 bytes: the minimum recommended HS256 key length (RFC 7518 §3.2).
+    jwt_secret: str = Field(..., min_length=32)
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     # Stored as a comma-separated string (avoids pydantic-settings JSON parsing);

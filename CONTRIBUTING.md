@@ -63,11 +63,11 @@ docker compose up -d postgres
 cd backend
 # init runs automatically via docker-compose; then migrate as superuser:
 ALEMBIC_DATABASE_URL=postgresql+asyncpg://kompilo:<pwd>@localhost:5432/kompilo \
-  JWT_SECRET=dev-0123456789 \
+  JWT_SECRET=dev-jwt-secret-0123456789abcdefg \
   DATABASE_URL=postgresql+asyncpg://kompilo_app:<pwd>@localhost:5432/kompilo \
   alembic upgrade head
 DATABASE_URL=postgresql+asyncpg://kompilo_app:<pwd>@localhost:5432/kompilo \
-  JWT_SECRET=dev-0123456789 pytest tests/integration -q
+  JWT_SECRET=dev-jwt-secret-0123456789abcdefg pytest tests/integration -q
 ```
 
 ## Before pushing

@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.security import decode_access_token
 from app.core.tenancy import apply_tenant_guc, set_current_tenant
 from app.db.session import async_session_factory
+from app.models.user import User
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -89,7 +90,45 @@ async def get_tenant_session(
             raise
 
 
+async def get_current_user(
+    db: Annotated[AsyncSession, Depends(get_tenant_session)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> User:
+    """Load the authenticated user from the Bearer token's ``sub`` claim.
+
+    Runs inside the tenant-scoped session, so RLS guarantees the user belongs to
+    the token's tenant. Requires a real Bearer token (the dev ``X-Tenant-ID``
+    fallback carries no user).
+    """
+    if not (authorization and authorization.lower().startswith("bearer ")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing authentication",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = authorization.split(" ", 1)[1].strip()
+    try:
+        claims = decode_access_token(token)
+    except jwt.PyJWTError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
+        ) from exc
+
+    subject = claims.get("sub")
+    if not subject:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Token missing subject"
+        )
+    user = await db.get(User, _parse_uuid(str(subject)))
+    if user is None or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive"
+        )
+    return user
+
+
 # Convenience aliases for route signatures.
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 TenantSession = Annotated[AsyncSession, Depends(get_tenant_session)]
 TenantId = Annotated[uuid.UUID, Depends(get_current_tenant_id)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
