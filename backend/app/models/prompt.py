@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -17,8 +17,15 @@ from app.models.base import SoftDeleteMixin, TenantMixin, TimestampMixin, UUIDPr
 class Prompt(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "prompts"
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id", "project_id", "slug", name="uq_prompts_tenant_id_project_id_slug"
+        # PARTIAL unique index: a slug is unique among LIVE prompts of a project, so
+        # it can be reused once a prompt is soft-deleted (see migration 0006).
+        Index(
+            "uq_prompts_tenant_id_project_id_slug",
+            "tenant_id",
+            "project_id",
+            "slug",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
         ),
         Index("ix_prompts_tenant_id_project_id", "tenant_id", "project_id"),
     )

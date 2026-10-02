@@ -139,6 +139,29 @@ The exact checks (commands + expected results) are in the task summary and below
    admin-only operations (e.g. `DELETE /v1/artifacts/{id}`, `GET /v1/organizations/members`)
    return 403 for non-admins.
 
+9. **Projects / Prompts / Versions (CRUD + versioning)** — reuse `$TOKEN` from step 8.
+   ```bash
+   # Create a project, then a prompt inside it:
+   PROJECT=$(curl -s -X POST http://localhost:8000/v1/projects -H "Authorization: Bearer $TOKEN" \
+        -H 'Content-Type: application/json' -d '{"slug":"alpha","name":"Alpha"}' \
+        | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+   PROMPT=$(curl -s -X POST http://localhost:8000/v1/projects/$PROJECT/prompts \
+        -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+        -d '{"slug":"greeting","name":"Greeting"}' \
+        | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+   # Append two versions — numbers auto-increment (1, then 2):
+   curl -s -X POST http://localhost:8000/v1/prompts/$PROMPT/versions -H "Authorization: Bearer $TOKEN" \
+        -H 'Content-Type: application/json' -d '{"model_target":"claude","catr":{"n":1}}' | python3 -m json.tool
+   curl -s -X POST http://localhost:8000/v1/prompts/$PROMPT/versions -H "Authorization: Bearer $TOKEN" \
+        -H 'Content-Type: application/json' -d '{"model_target":"claude","catr":{"n":2}}' | python3 -m json.tool
+   # List the version history (oldest first):
+   curl -s http://localhost:8000/v1/prompts/$PROMPT/versions -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+   ```
+   Expected: the two versions report `"version": 1` then `"version": 2`; the list returns both.
+   Deleting a project/prompt is a **soft delete** (org admin only) that cascades to child
+   prompts/versions; a slug can be reused after its owner is soft-deleted. See the
+   `kompilo-crud` skill.
+
 ---
 
 ## Architecture notes
