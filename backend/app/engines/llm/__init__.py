@@ -46,11 +46,10 @@ def get_llm_client(settings: Settings | None = None) -> LLMClient | None:
     """
     cfg = settings or default_settings
     if cfg.anthropic_api_key:
-        logger.warning(
-            "ANTHROPIC_API_KEY is set but the real LLM client is not wired yet; "
-            "using EchoLLMClient."
-        )
-        return EchoLLMClient()
+        # Lazy import so the vendor SDK is only loaded when a key is configured.
+        from app.engines.llm.anthropic_client import AnthropicClient
+
+        return AnthropicClient(cfg.anthropic_api_key, timeout_s=cfg.llm_timeout_s)
     if cfg.is_production:
         logger.error("No LLM provider configured in production; understand will error.")
         return None

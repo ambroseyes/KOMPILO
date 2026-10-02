@@ -20,6 +20,7 @@ dependencies = [
   "pgvector>=0.3,<1.0",
   "pyjwt>=2.15,<3",
   "bcrypt>=4.1,<6",
+  "anthropic>=1.11,<2",
 ]
 
 [project.optional-dependencies]
@@ -42,6 +43,9 @@ packages = ["app"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+  "live: tests that call a real LLM provider (skipped without an API key)",
+]
 
 [tool.black]
 line-length = 100
