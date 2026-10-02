@@ -25,9 +25,12 @@ execution strategy:
 └── docker-compose.yml    # postgres(pgvector) · redis · backend · worker · frontend
 ```
 
-> **Status:** project skeleton. The pipeline stages are **STUB** implementations
-> (responses carry `is_stub: true`). The surrounding architecture — database,
-> multi-tenant RLS isolation, migrations, workers, tooling — is real, not mocked.
+> **Status:** project skeleton. The **`understand`** stage is now a real
+> deterministic analyzer (heuristic, `method="heuristic-v1"` — not an LLM); the
+> remaining pipeline stages are still **STUB** (the `/v1/compile` response carries
+> `is_stub: true` for the pipeline as a whole, but the `understand` trace entry is
+> no longer marked STUB). The surrounding architecture — database, multi-tenant RLS
+> isolation, migrations, async ARQ workers, tooling — is real, not mocked.
 
 ## Prerequisites
 
@@ -122,22 +125,81 @@ The exact checks (commands + expected results) are in the task summary and below
    ```
    Expected: org created; the scoped artifacts list returns `[]` (and 401 without a tenant).
 
-8. **Auth (register → login → token-scoped access)**
+8. **Auth (signup → token-scoped access → refresh → RBAC)**
    ```bash
-   # Register a user in that org (DEV bootstrap), then log in:
-   curl -s -X POST http://localhost:8000/v1/auth/register -H 'Content-Type: application/json' \
-        -d '{"org_slug":"acme","email":"you@acme.io","password":"s3cret-pass"}'
-   TOKEN=$(curl -s -X POST http://localhost:8000/v1/auth/login -H 'Content-Type: application/json' \
-        -d '{"org_slug":"acme","email":"you@acme.io","password":"s3cret-pass"}' \
-        | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
-   # Use the token — tenant is derived from it, no X-Tenant-ID needed:
-   curl -s http://localhost:8000/v1/auth/me        -H "Authorization: Bearer $TOKEN"
-   curl -s http://localhost:8000/v1/artifacts      -H "Authorization: Bearer $TOKEN"
+   # Signup creates a brand-new organization + its OWNER user, returning both tokens:
+   TOKENS=$(curl -s -X POST http://localhost:8000/v1/auth/signup -H 'Content-Type: application/json' \
+        -d '{"org_slug":"acme","org_name":"Acme","email":"owner@acme.io","password":"s3cret-pass"}')
+   TOKEN=$(echo "$TOKENS"   | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+   REFRESH=$(echo "$TOKENS" | python3 -c "import sys,json;print(json.load(sys.stdin)['refresh_token'])")
+   # Use the access token — tenant is derived from it, no X-Tenant-ID needed:
+   curl -s http://localhost:8000/v1/auth/me   -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+   curl -s http://localhost:8000/v1/artifacts -H "Authorization: Bearer $TOKEN"
+   # Exchange the refresh token for a fresh access token (rotation):
+   curl -s -X POST http://localhost:8000/v1/auth/refresh -H 'Content-Type: application/json' \
+        -d "{\"refresh_token\":\"$REFRESH\"}" | python3 -m json.tool
    ```
-   Expected: user created; `/auth/me` returns it; artifact calls are scoped to the token's tenant.
-   Business routes require a token (members); the first user of an org is its admin, and
-   admin-only operations (e.g. `DELETE /v1/artifacts/{id}`, `GET /v1/organizations/members`)
-   return 403 for non-admins.
+   Expected: `/auth/me` returns the user with `role: "owner"`; the token response is
+   `{access_token, refresh_token, token_type:"bearer", expires_in:1800}`. The signup user
+   is the org **owner**; `DELETE` routes and `GET /v1/organizations/members` return **403**
+   for a plain `member`. (`/v1/auth/register` still adds extra users to an existing org in
+   dev.) See the `kompilo-auth` skill.
+
+   **Test it in Swagger (`/docs`):** open http://localhost:8000/docs → run
+   `POST /v1/auth/signup` → copy `access_token` from the response → click **Authorize**
+   (top-right), paste the token, **Authorize** → now every 🔒 endpoint is called with the
+   bearer token. Example token response:
+   ```json
+   {
+     "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+     "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+     "token_type": "bearer",
+     "expires_in": 1800
+   }
+   ```
+
+9. **Projects / Prompts / Versions (CRUD + versioning)** — reuse `$TOKEN` from step 8.
+   ```bash
+   # Create a project, then a prompt inside it:
+   PROJECT=$(curl -s -X POST http://localhost:8000/v1/projects -H "Authorization: Bearer $TOKEN" \
+        -H 'Content-Type: application/json' -d '{"slug":"alpha","name":"Alpha"}' \
+        | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+   PROMPT=$(curl -s -X POST http://localhost:8000/v1/projects/$PROJECT/prompts \
+        -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+        -d '{"slug":"greeting","name":"Greeting"}' \
+        | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+   # Append two versions — numbers auto-increment (1, then 2):
+   curl -s -X POST http://localhost:8000/v1/prompts/$PROMPT/versions -H "Authorization: Bearer $TOKEN" \
+        -H 'Content-Type: application/json' -d '{"model_target":"claude","catr":{"n":1}}' | python3 -m json.tool
+   curl -s -X POST http://localhost:8000/v1/prompts/$PROMPT/versions -H "Authorization: Bearer $TOKEN" \
+        -H 'Content-Type: application/json' -d '{"model_target":"claude","catr":{"n":2}}' | python3 -m json.tool
+   # List the version history (oldest first):
+   curl -s http://localhost:8000/v1/prompts/$PROMPT/versions -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+   ```
+   Expected: the two versions report `"version": 1` then `"version": 2`; the list returns both.
+   Deleting a project/prompt is a **soft delete** (org admin only) that cascades to child
+   prompts/versions; a slug can be reused after its owner is soft-deleted. See the
+   `kompilo-crud` skill.
+
+10. **Understand stage (async via ARQ worker)** — analyze an intent into a CATR.
+    ```bash
+    # Create a version carrying the raw intent to analyze:
+    VERSION=$(curl -s -X POST http://localhost:8000/v1/prompts/$PROMPT/versions \
+         -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+         -d '{"source_intent":"Implémente une fonction Python qui parse un CSV"}' \
+         | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+    # Kick off the understand run (async → 202 Accepted, status pending):
+    EXEC=$(curl -s -X POST http://localhost:8000/v1/executions -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' -d "{\"prompt_version_id\":\"$VERSION\"}" \
+         | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+    # Poll until the worker finishes (status: pending → succeeded):
+    curl -s http://localhost:8000/v1/executions/$EXEC -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+    ```
+    Expected: the execution moves to `"status": "succeeded"` and `output.catr` holds the
+    structured understanding (`task_type`, `entities`, `constraints`, `open_questions`,
+    `confidence`, `method: "heuristic-v1"`); the same CATR is written onto the prompt
+    version. The worker must be running (`docker compose up worker`). The analysis is a
+    deterministic heuristic, **not** an LLM — see the `kompilo-pipeline` skill.
 
 ---
 

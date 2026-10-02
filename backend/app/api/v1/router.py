@@ -2,7 +2,15 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.routes import artifacts, auth, health, organizations, projects, prompts
+from app.api.v1.routes import (
+    artifacts,
+    auth,
+    executions,
+    health,
+    organizations,
+    projects,
+    prompts,
+)
 from app.api.v1.routes import compile as compile_routes
 
 api_router = APIRouter()

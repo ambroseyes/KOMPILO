@@ -31,7 +31,9 @@ class Settings(BaseSettings):
     # >= 32 bytes: the minimum recommended HS256 key length (RFC 7518 §3.2).
     jwt_secret: str = Field(..., min_length=32)
     jwt_algorithm: str = "HS256"
+    # Short-lived access token; longer-lived refresh token (rotated on use).
     access_token_expire_minutes: int = 30
+    refresh_token_expire_minutes: int = 60 * 24 * 7  # 7 days
     # Stored as a comma-separated string (avoids pydantic-settings JSON parsing);
     # use `cors_origins_list` where a list is needed.
     cors_origins: str = "http://localhost:5173"

@@ -37,27 +37,66 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-def create_access_token(
-    subject: str,
+#: JWT ``type`` claim values — an access token must never be accepted where a
+#: refresh token is required, and vice-versa.
+ACCESS_TOKEN_TYPE = "access"
+REFRESH_TOKEN_TYPE = "refresh"
+
+
+def _create_token(
     *,
+    subject: str,
     tenant_id: str,
-    expires_minutes: int | None = None,
-    extra_claims: dict[str, Any] | None = None,
+    role: str,
+    token_type: str,
+    expires_minutes: int,
 ) -> str:
-    """Create a signed JWT carrying the subject and tenant scope (``tid``)."""
     now = datetime.now(UTC)
-    expire = now + timedelta(minutes=expires_minutes or settings.access_token_expire_minutes)
     payload: dict[str, Any] = {
         "sub": subject,
         "tid": tenant_id,
+        "role": role,
+        "type": token_type,
         "iat": now,
-        "exp": expire,
+        "exp": now + timedelta(minutes=expires_minutes),
     }
-    if extra_claims:
-        payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-def decode_access_token(token: str) -> dict[str, Any]:
-    """Decode and verify a JWT. Raises ``jwt.PyJWTError`` on invalid/expired tokens."""
-    return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+def create_access_token(
+    subject: str, *, tenant_id: str, role: str, expires_minutes: int | None = None
+) -> str:
+    """Create a short-lived access JWT carrying the subject, tenant and role."""
+    return _create_token(
+        subject=subject,
+        tenant_id=tenant_id,
+        role=role,
+        token_type=ACCESS_TOKEN_TYPE,
+        expires_minutes=expires_minutes or settings.access_token_expire_minutes,
+    )
+
+
+def create_refresh_token(
+    subject: str, *, tenant_id: str, role: str, expires_minutes: int | None = None
+) -> str:
+    """Create a longer-lived refresh JWT (exchanged for a new access token)."""
+    return _create_token(
+        subject=subject,
+        tenant_id=tenant_id,
+        role=role,
+        token_type=REFRESH_TOKEN_TYPE,
+        expires_minutes=expires_minutes or settings.refresh_token_expire_minutes,
+    )
+
+
+def decode_token(token: str, *, expected_type: str) -> dict[str, Any]:
+    """Decode a JWT and enforce its ``type`` claim.
+
+    Raises ``jwt.PyJWTError`` on an invalid/expired signature OR a token-type
+    mismatch (e.g. a refresh token presented where an access token is required),
+    so callers can treat every failure uniformly as "unauthorized".
+    """
+    claims = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    if claims.get("type") != expected_type:
+        raise jwt.InvalidTokenError("unexpected token type")
+    return claims

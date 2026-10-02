@@ -26,8 +26,10 @@ from app.schemas.understand import AmbiguitySeverity, UnderstandCore, Understand
 from app.telemetry.logging import get_logger
 
 logger = get_logger(__name__)
+from app.engines.understand import analyze_intent
 
 _STUB_NOTE = "STUB — placeholder output, not real reasoning."
+_UNDERSTAND_NOTE = "Deterministic heuristic analysis (heuristic-v1); not an LLM."
 
 # Base for the exponential backoff between retries (seconds); small so tests stay fast.
 _BACKOFF_BASE_S = 0.1
@@ -35,6 +37,7 @@ _BACKOFF_BASE_S = 0.1
 
 class UnderstandStage(Stage):
     """Analyse the intent into a validated understanding via a forced tool call."""
+    """REAL (heuristic) — turns the intent into a CATR via ``analyze_intent``."""
 
     name = "understand"
 
@@ -102,6 +105,10 @@ class UnderstandStage(Stage):
                 "usage": usage,
             }
         )
+        catr = analyze_intent(ctx.intent, ctx.context)
+        output = catr.model_dump()
+        ctx.artifacts[self.name] = output
+        return StageResult(self.name, "ok", _UNDERSTAND_NOTE, output)
 
 
 class StrategizeStage(Stage):
