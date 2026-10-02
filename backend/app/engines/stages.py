@@ -44,9 +44,9 @@ class UnderstandStage(Stage):
     async def run(self, ctx: PipelineContext) -> StageResult:
         intent = ctx.intent.strip()
         if not intent:
-            return StageResult(self.name, "error", "empty intent")
+            return StageResult(self.name, "error", "empty intent", is_stub=False)
         if self._llm is None:
-            return StageResult(self.name, "error", "no LLM provider configured")
+            return StageResult(self.name, "error", "no LLM provider configured", is_stub=False)
 
         system = build_system_prompt()
         user = build_user_message(intent, ctx.context)
@@ -77,10 +77,13 @@ class UnderstandStage(Stage):
             result = self._finalize(core, model=call.model, usage=call.usage)
             output = result.model_dump(mode="json")
             ctx.artifacts[self.name] = output
-            return StageResult(self.name, "ok", "understanding produced", output)
+            return StageResult(self.name, "ok", "understanding produced", output, is_stub=False)
 
         return StageResult(
-            self.name, "error", f"understand failed after {attempts} attempts: {last_error}"
+            self.name,
+            "error",
+            f"understand failed after {attempts} attempts: {last_error}",
+            is_stub=False,
         )
 
     def _finalize(

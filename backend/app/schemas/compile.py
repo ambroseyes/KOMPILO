@@ -21,6 +21,10 @@ class StageTrace(BaseModel):
     stage: str
     status: str
     note: str
+    is_stub: bool = Field(
+        True,
+        description="True while this stage is a STUB placeholder.",
+    )
 
 
 class CompileResponse(BaseModel):
@@ -29,5 +33,5 @@ class CompileResponse(BaseModel):
     trace: list[StageTrace]
     is_stub: bool = Field(
         True,
-        description="True while pipeline stages are STUB implementations.",
+        description="True while ANY pipeline stage is still a STUB implementation.",
     )
