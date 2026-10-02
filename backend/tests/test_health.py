@@ -32,12 +32,9 @@ async def test_health_reports_version_and_db() -> None:
 
 
 @pytest.mark.asyncio
-async def test_compile_stub_runs_all_stages() -> None:
+async def test_compile_requires_a_task() -> None:
+    """The compile route validates its body before doing any work."""
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/v1/compile", json={"intent": "ship a feature"})
-    assert resp.status_code == 200
-    body = resp.json()
-    assert body["is_stub"] is True
-    assert len(body["trace"]) == 8
-    assert body["trace"][0]["stage"] == "understand"
+        resp = await client.post("/v1/compile", json={})
+    assert resp.status_code == 422  # missing `task`

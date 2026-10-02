@@ -1,29 +1,29 @@
-"""Compile endpoint: turn an intent into an execution strategy (STUB stages).
+"""Compile endpoint: turn a task into an execution plan + a compiled prompt.
 
-NOTE: unauthenticated for bootstrap. Once the stages are real this MUST be
-moved behind the tenant-scoped dependency (see ``app.api.deps.TenantSession``).
+Public and stateless (no DB, no tenant) — a pure compute endpoint for the consumer
+screen. It is deterministic except for the Intent Engine's optional, cost-gated LLM
+refine. Driven by ``KompiloCore`` (see the kompilo-pipeline / kompilo-intent skills).
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.engines.pipeline import pipeline
-from app.schemas.compile import CompileRequest, CompileResponse, StageTrace
+from app.engines.kompilo_core import KompiloCore
+from app.schemas.compile import CompileRequest, CompileResponse
 
 router = APIRouter()
+_core = KompiloCore()
 
 
-@router.post("/compile", response_model=CompileResponse, summary="Compile an intent")
-async def compile_intent(payload: CompileRequest) -> CompileResponse:
-    """Run the Kompilo pipeline.
-
-    Stages are STUB implementations — the response carries ``is_stub=true``.
-    """
-    ctx = await pipeline.run(payload.intent, payload.context)
-    return CompileResponse(
-        intent=ctx.intent,
-        strategy=ctx.artifacts,
-        trace=[StageTrace(stage=r.stage, status=r.status, note=r.note) for r in ctx.trace],
-        is_stub=True,
+@router.post(
+    "/compile", response_model=CompileResponse, summary="Compile a task into a plan + prompt"
+)
+async def compile_task(payload: CompileRequest) -> CompileResponse:
+    return await _core.compile(
+        payload.task,
+        target_model=payload.target_model,
+        mode=payload.mode,
+        output_format=payload.output_format,
+        quality_contract=payload.quality_contract,
     )
