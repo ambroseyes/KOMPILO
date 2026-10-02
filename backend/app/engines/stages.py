@@ -11,22 +11,26 @@ from __future__ import annotations
 from typing import Any
 
 from app.engines.base import PipelineContext, Stage, StageResult
-from app.engines.understand import analyze_intent
+from app.engines.intent import IntentEngine
 
 _STUB_NOTE = "STUB — placeholder output, not real reasoning."
-_UNDERSTAND_NOTE = "Deterministic heuristic analysis (heuristic-v1); not an LLM."
 
 
 class UnderstandStage(Stage):
-    """REAL (heuristic) — turns the intent into a CATR via ``analyze_intent``."""
+    """REAL — turns the intent into a CATR via the Intent Engine (heuristics + optional LLM)."""
 
     name = "understand"
 
     async def run(self, ctx: PipelineContext) -> StageResult:
-        catr = analyze_intent(ctx.intent, ctx.context)
+        catr = await IntentEngine().run(ctx.intent)
         output = catr.model_dump()
         ctx.artifacts[self.name] = output
-        return StageResult(self.name, "ok", _UNDERSTAND_NOTE, output)
+        note = (
+            "Intent Engine v1 (heuristics + LLM refinement)."
+            if catr.meta.enriched_by_llm
+            else "Intent Engine v1 (deterministic heuristics; no LLM called)."
+        )
+        return StageResult(self.name, "ok", note, output)
 
 
 class StrategizeStage(Stage):

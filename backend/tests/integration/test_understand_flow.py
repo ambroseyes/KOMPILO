@@ -151,8 +151,9 @@ async def test_understand_async_flow_and_isolation() -> None:
             body = fetched.json()
             assert body["status"] == "succeeded"
             catr = body["output"]["catr"]
-            assert catr["method"] == "heuristic-v1"
-            assert catr["task_type"] == "code_generation"
+            assert catr["meta"]["method"] == "heuristic-v1"
+            assert catr["domain"] == "software"
+            assert catr["objective"]
             assert body["started_at"] is not None and body["finished_at"] is not None
 
             # The CATR is also written back onto the prompt version (checked in DB,
@@ -162,7 +163,7 @@ async def test_understand_async_flow_and_isolation() -> None:
                 stored = await s.get(PromptVersion, uuid.UUID(version_id))
                 assert stored is not None
                 assert stored.catr is not None
-                assert stored.catr["task_type"] == "code_generation"
+                assert stored.catr["domain"] == "software"
 
             # ── Worker is tenant-confined: running under B can't touch A's row ──
             pending = await client.post(
@@ -204,7 +205,7 @@ async def test_understand_async_flow_and_isolation() -> None:
 
                 polled = await client.get(f"/v1/executions/{queued_id}", headers=_bearer(member))
                 assert polled.json()["status"] == "succeeded", polled.text
-                assert polled.json()["output"]["catr"]["task_type"] == "code_generation"
+                assert polled.json()["output"]["catr"]["domain"] == "software"
     finally:
         await _delete_org(org_a)
         await _delete_org(org_b)

@@ -9,8 +9,8 @@ from sqlalchemy import func
 
 from app.core.tenancy import apply_tenant_guc
 from app.db.session import session_scope
+from app.engines.intent import IntentEngine
 from app.engines.pipeline import pipeline
-from app.engines.understand import analyze_intent
 from app.models.execution import Execution
 from app.models.prompt import PromptVersion
 from app.telemetry.logging import get_logger
@@ -96,10 +96,7 @@ async def run_understand_task(
                 execution.finished_at = func.now()
                 return {"status": "failed", "execution_id": execution_id}
 
-            raw_input = execution.input if isinstance(execution.input, dict) else {}
-            context = raw_input.get("context") if isinstance(raw_input.get("context"), dict) else {}
-
-            catr = analyze_intent(intent, context)
+            catr = await IntentEngine().run(intent)
             payload = catr.model_dump()
 
             execution.started_at = func.now()

@@ -7,7 +7,7 @@ description: >-
   one, adding a stage, shaping a stage's output schema, dispatching work to the ARQ
   worker, writing a worker task that touches tenant data, or wiring the executions
   API. Triggers: pipeline stage, understand/strategize/compile/route/execute/verify,
-  CATR, is_stub, Stage.run, analyze_intent, ARQ, worker task, enqueue_job, executions,
+  CATR, is_stub, Stage.run, IntentEngine, ARQ, worker task, enqueue_job, executions,
   background task, RLS in the worker, "make a stage real", heuristic vs LLM.
 ---
 
@@ -16,7 +16,8 @@ description: >-
 How to make a pipeline stage real and run it off the request path without breaking
 tenant isolation or honesty about what is real. Builds on `kompilo-rls` (isolation)
 and `kompilo-crud` (resource routes). Reference implementation:
-`backend/app/engines/understand.py` (the first real stage), `app/engines/stages.py`,
+`backend/app/engines/intent.py` + `engines/heuristics.py` (the first real stage, via
+the Intent Engine), `app/engines/stages.py`,
 `app/workers/tasks.py`, `app/core/queue.py`, `app/api/v1/routes/executions.py`.
 
 ## The pipeline shape (don't fight it)
@@ -30,8 +31,8 @@ and `kompilo-crud` (resource routes). Reference implementation:
 ## Making a stage real — the 5 rules
 
 1. **Core logic lives in its own module, not in the Stage.** Put the real work in a
-   pure function with a stable signature (e.g. `analyze_intent(intent, context) ->
-   Catr`). The `Stage.run` is a thin adapter that calls it and wraps the result.
+   engine/function with a stable signature (e.g. `IntentEngine().run(sentence) ->
+   CanonicalAITask`). The `Stage.run` is a thin adapter that calls it and wraps the result.
    The same core is then reused by the worker task and is unit-testable alone.
 2. **Type the output with a Pydantic model** in `app/schemas/` (e.g. `Catr`). Store
    it as `model.model_dump()` into the JSONB column / artifact. Use

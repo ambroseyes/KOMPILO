@@ -1,14 +1,16 @@
-"""CATR — Canonical Analyzed Task Representation (output of the `understand` stage).
+"""CATR — the Canonical AI Task Representation (output of the Intent Engine).
 
-The CATR is the structured understanding of a human intent: what the goal is, what
-kind of task it is, the entities/inputs/constraints involved, the assumptions made
-to fill gaps, the open questions that would block a confident plan, and how success
-is judged. It is consumed by the downstream pipeline (strategize/compile/…).
+``CanonicalAITask`` is Kompilo's structured, strictly-typed understanding of a human
+intent: what to achieve, in which domain, with which inputs/context/constraints, for
+whom, how hard/risky it is, and — crucially — what is still MISSING or ambiguous. It
+is produced by ``app.engines.intent.IntentEngine`` and consumed by the downstream
+pipeline (strategize/compile/…) and stored on ``prompt_versions.catr``.
 
-``method`` records HOW the CATR was produced. ``heuristic-v1`` means a deterministic,
-rule-based analyzer (NOT an LLM). This marker is intentional: no consumer should
-mistake heuristic output for model reasoning. A Claude-backed analyzer would emit a
-different ``method`` behind the same schema.
+``meta`` records provenance so no consumer mistakes heuristic output for model
+reasoning: ``method`` is ``heuristic-v1`` (rules only) or ``heuristic-v1+llm`` (a light
+LLM refined objective/expected_output), and ``enriched_by_llm`` says whether the LLM
+was actually called. A partial CATR is valid: optional fields may be empty while the
+engine lacks the information (that's what ``missing_information`` is for).
 """
 
 from __future__ import annotations
@@ -17,31 +19,41 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-TaskType = Literal[
-    "code_generation",
-    "data_analysis",
-    "writing",
-    "qa",
-    "planning",
-    "other",
-]
-
-CatrMethod = Literal["heuristic-v1"]
+Complexity = Literal["low", "medium", "high"]
+Risk = Literal["low", "medium", "high"]
+Importance = Literal["low", "medium", "high"]
 
 
-class Catr(BaseModel):
+class MissingInformation(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    method: CatrMethod = "heuristic-v1"
-    goal: str = Field(..., description="Normalized one-line objective.")
-    task_type: TaskType
-    language: str = Field(
-        ..., description="Detected language of the intent (ISO-639-1, best effort)."
-    )
-    entities: list[str] = Field(default_factory=list)
-    inputs: list[str] = Field(default_factory=list)
-    constraints: list[str] = Field(default_factory=list)
-    assumptions: list[str] = Field(default_factory=list)
-    open_questions: list[str] = Field(default_factory=list)
-    success_criteria: list[str] = Field(default_factory=list)
+    label: str
+    importance: Importance
+
+
+class CatrMeta(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method: str  # "heuristic-v1" | "heuristic-v1+llm"
     confidence: float = Field(..., ge=0.0, le=1.0)
+    enriched_by_llm: bool
+
+
+class CanonicalAITask(BaseModel):
+    """Strictly-typed canonical task representation (CATR)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    objective: str
+    sub_goals: list[str] = Field(default_factory=list)
+    domain: str
+    inputs: list[str] = Field(default_factory=list)
+    context: list[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    expected_output: str | None = None
+    audience: str | None = None
+    complexity: Complexity
+    missing_information: list[MissingInformation] = Field(default_factory=list)
+    ambiguities: list[str] = Field(default_factory=list)
+    risk: Risk
+    meta: CatrMeta

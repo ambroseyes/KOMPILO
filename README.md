@@ -196,10 +196,25 @@ The exact checks (commands + expected results) are in the task summary and below
     curl -s http://localhost:8000/v1/executions/$EXEC -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
     ```
     Expected: the execution moves to `"status": "succeeded"` and `output.catr` holds the
-    structured understanding (`task_type`, `entities`, `constraints`, `open_questions`,
-    `confidence`, `method: "heuristic-v1"`); the same CATR is written onto the prompt
-    version. The worker must be running (`docker compose up worker`). The analysis is a
-    deterministic heuristic, **not** an LLM — see the `kompilo-pipeline` skill.
+    **CanonicalAITask** (CATR): `objective`, `sub_goals`, `domain`, `inputs`, `context`,
+    `constraints`, `expected_output`, `audience`, `complexity`, `missing_information`,
+    `ambiguities`, `risk`, and `meta.method` (`heuristic-v1`, or `heuristic-v1+llm` when
+    the LLM refined it). The same CATR is written onto the prompt version. The worker must
+    be running (`docker compose up worker`). The CATR is produced by the **Intent Engine**
+    (heuristics first; a light LLM is consulted **only** when confidence is low **and**
+    `OPENAI_API_KEY` is set) — see the `kompilo-intent` skill.
+
+    **Enable the LLM fallback / test your own phrases.** Paste your key in `.env`
+    (`OPENAI_API_KEY=sk-...`; optionally `OPENAI_BASE_URL`, `INTENT_LLM_MODEL`,
+    `INTENT_CONFIDENCE_THRESHOLD`). Try the engine on any sentence, offline or with the
+    LLM, from the backend venv:
+    ```bash
+    cd backend && python -c "import asyncio,json; from app.engines.intent import IntentEngine; \
+      print(json.dumps(asyncio.run(IntentEngine().run('VOTRE PHRASE ICI')).model_dump(), ensure_ascii=False, indent=2))"
+    ```
+    With no key it stays on the deterministic heuristic path (`meta.enriched_by_llm:false`);
+    with a key, a low-confidence (vague) phrase triggers one LLM call to refine the
+    objective/expected output (`meta.method:"heuristic-v1+llm"`).
 
 ---
 

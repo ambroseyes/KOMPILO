@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     # Kompilo targets Claude; keys are only required once real stages call out.
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
+    # OpenAI-compatible endpoint used by the Intent Engine's LLM fallback.
+    openai_base_url: str = "https://api.openai.com/v1"
+    intent_llm_model: str = "gpt-4o-mini"  # light/cheap model for intent extraction
+    # The Intent Engine calls the LLM ONLY when heuristic confidence is below this.
+    intent_confidence_threshold: float = 0.6
 
     @property
     def cors_origins_list(self) -> list[str]:
