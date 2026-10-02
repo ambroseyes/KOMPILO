@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -28,6 +29,10 @@ class StageTrace(BaseModel):
 
 
 class CompileResponse(BaseModel):
+    execution_id: uuid.UUID = Field(
+        ...,
+        description="Id of the persisted Execution recording this run.",
+    )
     intent: str
     strategy: dict[str, Any]
     trace: list[StageTrace]
