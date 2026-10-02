@@ -17,7 +17,7 @@ from app.engines.llm.base import (
     LLMTimeout,
     LLMToolCall,
 )
-from app.engines.llm.fake import FakeLLMClient
+from app.engines.llm.fake import EchoLLMClient, FakeLLMClient
 from app.telemetry.logging import get_logger
 
 logger = get_logger(__name__)
@@ -29,21 +29,28 @@ __all__ = [
     "LLMTimeout",
     "LLMBadOutput",
     "FakeLLMClient",
+    "EchoLLMClient",
     "get_llm_client",
 ]
 
 
-def get_llm_client(settings: Settings | None = None) -> LLMClient:
-    """Return the configured LLM client.
+def get_llm_client(settings: Settings | None = None) -> LLMClient | None:
+    """Return the configured LLM client, or ``None`` when none is available.
 
-    With no Anthropic API key configured, returns a :class:`FakeLLMClient` so dev
-    and CI run key-less. The real ``AnthropicClient`` is introduced in a
-    subsequent change; a configured key logs a warning until then.
+    - A configured Anthropic key: the real client (wired in a later change; until
+      then the :class:`EchoLLMClient` stands in, logging a warning).
+    - No key, non-production: the :class:`EchoLLMClient`, so dev and CI run
+      key-less end-to-end without faking a real analysis.
+    - No key, production: ``None`` — the understand stage then errors explicitly
+      rather than returning an invented understanding.
     """
     cfg = settings or default_settings
     if cfg.anthropic_api_key:
-        logger.warning(
-            "ANTHROPIC_API_KEY is set but the real LLM client is not wired yet; "
-            "using FakeLLMClient."
-        )
-    return FakeLLMClient()
+        # Lazy import so the vendor SDK is only loaded when a key is configured.
+        from app.engines.llm.anthropic_client import AnthropicClient
+
+        return AnthropicClient(cfg.anthropic_api_key, timeout_s=cfg.llm_timeout_s)
+    if cfg.is_production:
+        logger.error("No LLM provider configured in production; understand will error.")
+        return None
+    return EchoLLMClient()

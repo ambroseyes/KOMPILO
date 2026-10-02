@@ -5,15 +5,16 @@ from __future__ import annotations
 from typing import Any
 
 from app.engines.base import PipelineContext, Stage, StageResult
-from app.engines.stages import DEFAULT_STAGES
+from app.engines.llm import LLMClient, get_llm_client
+from app.engines.stages import build_default_stages
 from app.telemetry.logging import get_logger
 
 logger = get_logger(__name__)
 
 
 class Pipeline:
-    def __init__(self, stages: list[Stage] | None = None) -> None:
-        self._stages = stages if stages is not None else DEFAULT_STAGES
+    def __init__(self, stages: list[Stage]) -> None:
+        self._stages = stages
 
     async def run(self, intent: str, context: dict[str, Any] | None = None) -> PipelineContext:
         ctx = PipelineContext(intent=intent, context=context or {})
@@ -29,5 +30,11 @@ class Pipeline:
         return ctx
 
 
+def build_default_pipeline(llm: LLMClient | None = None) -> Pipeline:
+    """Build the canonical pipeline, resolving the LLM client from settings."""
+    client = llm if llm is not None else get_llm_client()
+    return Pipeline(build_default_stages(client))
+
+
 # Shared default instance.
-pipeline = Pipeline()
+pipeline = build_default_pipeline()
