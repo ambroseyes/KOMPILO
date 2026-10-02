@@ -14,10 +14,28 @@ same ``analyze_intent(intent, context) -> Catr`` signature; everything downstrea
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any
 
+from pydantic import ValidationError
+
+from app.core.config import settings
+from app.engines.llm import LLMClient, LLMError, get_llm_client
+from app.engines.prompts.understand import (
+    TOOL_DESCRIPTION,
+    TOOL_NAME,
+    build_system_prompt,
+    build_user_message,
+    catr_tool_schema,
+)
 from app.schemas.catr import Catr, TaskType
+from app.telemetry.logging import get_logger
+
+logger = get_logger(__name__)
+
+# Base for the exponential backoff between LLM retries (seconds); small by design.
+_BACKOFF_BASE_S = 0.2
 
 # ── Keyword tables (lowercase; matched on word boundaries, fr + en) ──────────────
 # Order of TASK_KEYWORDS is also the tie-break priority when scores are equal.
@@ -486,3 +504,58 @@ def analyze_intent(intent: str, context: dict[str, Any] | None = None) -> Catr:
         success_criteria=success_criteria,
         confidence=confidence,
     )
+
+
+async def analyze_intent_llm(intent: str, context: dict[str, Any] | None, llm: LLMClient) -> Catr:
+    """Analyze an intent into a CATR via a forced-tool Claude call (``claude-v1``).
+
+    The model emits the CATR fields through the ``analyze_intent`` tool; we stamp
+    ``method="claude-v1"`` and re-validate against :class:`Catr` (belt and braces,
+    so an off-schema tool call is rejected). Bounded retries with backoff on a
+    transient LLM error or a validation failure; the last error propagates.
+    """
+    system = build_system_prompt()
+    user = build_user_message(intent, context)
+    schema = catr_tool_schema()
+    attempts = settings.llm_max_retries + 1
+    last_error: Exception | None = None
+
+    for attempt in range(attempts):
+        try:
+            call = await llm.emit_tool(
+                system=system,
+                user=user,
+                tool_name=TOOL_NAME,
+                tool_description=TOOL_DESCRIPTION,
+                input_schema=schema,
+                model=settings.understand_model,
+                max_tokens=settings.llm_max_tokens,
+                temperature=0.0,
+            )
+            return Catr.model_validate({**call.arguments, "method": "claude-v1"})
+        except (LLMError, ValidationError) as exc:
+            last_error = exc
+            logger.warning("understand(llm) attempt %d/%d failed: %s", attempt + 1, attempts, exc)
+            if attempt + 1 < attempts:
+                await asyncio.sleep(_BACKOFF_BASE_S * (2**attempt))
+
+    raise last_error if last_error is not None else LLMError("understand failed")
+
+
+async def understand(intent: str, context: dict[str, Any] | None = None) -> Catr:
+    """Produce a CATR, preferring the LLM analyzer and falling back to heuristic.
+
+    Engine selection is by configuration: an Anthropic key yields the Claude
+    analyzer (``claude-v1``); with no provider configured the deterministic
+    heuristic (``heuristic-v1``) is used. If a configured LLM call ultimately
+    fails, we degrade to the heuristic rather than erroring — the ``method`` marker
+    always tells which analyzer actually produced the result.
+    """
+    llm = get_llm_client()
+    if llm is None:
+        return analyze_intent(intent, context)
+    try:
+        return await analyze_intent_llm(intent, context, llm)
+    except (LLMError, ValidationError):
+        logger.warning("understand: LLM analysis failed; falling back to heuristic")
+        return analyze_intent(intent, context)

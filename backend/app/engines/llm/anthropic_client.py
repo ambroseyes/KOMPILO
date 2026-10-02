@@ -1,10 +1,10 @@
 """Anthropic implementation of the :class:`~app.engines.llm.base.LLMClient` port.
 
 Calls the Messages API asking the model to return structured JSON through a tool
-whose ``input_schema`` is ``UnderstandCore``'s JSON Schema. ``tool_choice`` stays
-``auto`` (portable across models that reject forced tool use) with ``strict`` on
-the tool for schema-valid arguments; the stage re-validates the payload and
-retries when no conforming tool call comes back.
+whose ``input_schema`` is provided by the caller (e.g. the CATR schema).
+``tool_choice`` stays ``auto`` (portable across models that reject forced tool use)
+with ``strict`` on the tool for schema-valid arguments; the caller re-validates the
+payload and retries when no conforming tool call comes back.
 """
 
 from __future__ import annotations

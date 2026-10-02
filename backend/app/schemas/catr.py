@@ -6,9 +6,10 @@ to fill gaps, the open questions that would block a confident plan, and how succ
 is judged. It is consumed by the downstream pipeline (strategize/compile/…).
 
 ``method`` records HOW the CATR was produced. ``heuristic-v1`` means a deterministic,
-rule-based analyzer (NOT an LLM). This marker is intentional: no consumer should
-mistake heuristic output for model reasoning. A Claude-backed analyzer would emit a
-different ``method`` behind the same schema.
+rule-based analyzer (NOT an LLM); ``claude-v1`` means a Claude-backed analysis. This
+marker is intentional: no consumer should mistake heuristic output for model
+reasoning. Both analyzers share the one ``analyze_intent``/``understand`` contract and
+emit this same schema.
 """
 
 from __future__ import annotations
@@ -26,7 +27,7 @@ TaskType = Literal[
     "other",
 ]
 
-CatrMethod = Literal["heuristic-v1"]
+CatrMethod = Literal["heuristic-v1", "claude-v1"]
 
 
 class Catr(BaseModel):
