@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, Text, text
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,7 +15,15 @@ from app.models.base import SoftDeleteMixin, TenantMixin, TimestampMixin, UUIDPr
 class Project(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "projects"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "slug", name="uq_projects_tenant_id_slug"),
+        # PARTIAL unique index: a slug is unique among LIVE projects of a tenant, so
+        # it can be reused once a project is soft-deleted (see migration 0006).
+        Index(
+            "uq_projects_tenant_id_slug",
+            "tenant_id",
+            "slug",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
         Index("ix_projects_tenant_id_team_id", "tenant_id", "team_id"),
     )
 

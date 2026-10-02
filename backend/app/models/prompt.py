@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -17,8 +17,15 @@ from app.models.base import SoftDeleteMixin, TenantMixin, TimestampMixin, UUIDPr
 class Prompt(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDeleteMixin, Base):
     __tablename__ = "prompts"
     __table_args__ = (
-        UniqueConstraint(
-            "tenant_id", "project_id", "slug", name="uq_prompts_tenant_id_project_id_slug"
+        # PARTIAL unique index: a slug is unique among LIVE prompts of a project, so
+        # it can be reused once a prompt is soft-deleted (see migration 0006).
+        Index(
+            "uq_prompts_tenant_id_project_id_slug",
+            "tenant_id",
+            "project_id",
+            "slug",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
         ),
         Index("ix_prompts_tenant_id_project_id", "tenant_id", "project_id"),
     )
@@ -56,6 +63,9 @@ class PromptVersion(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDelete
         PGUUID(as_uuid=True), ForeignKey("prompts.id", ondelete="CASCADE"), nullable=False
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Raw human intent this version compiles from — the input the `understand`
+    # stage analyzes into `catr`. Nullable until supplied.
+    source_intent: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Immutable source of this version: once a version is created its ``content``
     # and ``version`` never change — a new revision means a brand-new version row.
     # (The pipeline MAY later fill the JSONB outputs below; those are derived, not
