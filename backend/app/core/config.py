@@ -50,6 +50,17 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
 
+    # ── LLM pipeline tuning ──────────────────────────────────────────
+    # Model used by the lightweight "understand" analysis stage.
+    understand_model: str = "claude-haiku-4-5-20251001"
+    # Per-call client timeout (seconds) and bounded retry budget.
+    llm_timeout_s: float = 30.0
+    llm_max_retries: int = 2
+    llm_max_tokens: int = 2048
+    # Below this confidence (or with a high-severity ambiguity) the understand
+    # stage flags needs_clarification. Derived deterministically by our code.
+    understand_confidence_threshold: float = 0.5
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

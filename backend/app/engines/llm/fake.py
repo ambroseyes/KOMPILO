@@ -60,3 +60,43 @@ class FakeLLMClient:
     @property
     def call_count(self) -> int:
         return len(self.calls)
+
+
+class EchoLLMClient:
+    """Key-less default client for development.
+
+    Emits a deterministic result that is explicitly *not* a real analysis, so the
+    pipeline runs end-to-end without an API key and without pretending to have
+    understood anything. Production with no key gets no client at all (the stage
+    then errors); see ``get_llm_client``.
+    """
+
+    model = "fake-echo"
+
+    async def emit_tool(
+        self,
+        *,
+        system: str,
+        user: str,
+        tool_name: str,
+        tool_description: str,
+        input_schema: dict[str, Any],
+        model: str,
+        max_tokens: int,
+        temperature: float,
+    ) -> LLMToolCall:
+        return LLMToolCall(
+            name=tool_name,
+            arguments={
+                "normalized_intent": "(mode sans LLM) intention non analysee",
+                "language": "fr",
+                "task_type": "other",
+                "goal": "Indetermine : aucun appel LLM n'a ete effectue.",
+                "confidence": 0.0,
+                "assumptions": [
+                    "Aucune cle LLM configuree : reponse generee sans analyse reelle.",
+                ],
+            },
+            model=self.model,
+            usage={},
+        )
