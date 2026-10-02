@@ -61,8 +61,15 @@ class IntentEngine:
         assert self._provider is not None  # guarded by the caller
         user = f'Sentence: """{sentence.strip()}"""'
         try:
-            raw = await self._provider.complete_json(system=_LLM_SYSTEM, user=user, max_tokens=300)
-            data = json.loads(raw)
+            result = await self._provider.complete(
+                model=settings.intent_llm_model,
+                prompt=user,
+                system=_LLM_SYSTEM,
+                max_tokens=300,
+                temperature=0,
+                json_mode=True,
+            )
+            data = json.loads(result.text)
         except (ProviderError, json.JSONDecodeError, ValueError) as exc:
             logger.warning(
                 "intent: LLM refine failed (%s); keeping heuristic CATR", type(exc).__name__

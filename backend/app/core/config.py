@@ -57,6 +57,15 @@ class Settings(BaseSettings):
     # The Intent Engine calls the LLM ONLY when heuristic confidence is below this.
     intent_confidence_threshold: float = 0.6
 
+    # ── Gateway / execution ──────────────────────────────────────────
+    # Default model used by the Gateway/executor when none is routed.
+    execution_llm_model: str = "gpt-4o-mini"
+    # Semantic cache (normalized request + tenant). 0 disables caching.
+    gateway_cache_ttl_seconds: int = 3600
+    # Retries per model before falling back to the next, and backoff base.
+    gateway_max_attempts_per_model: int = 2
+    gateway_backoff_base_seconds: float = 0.2
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

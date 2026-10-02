@@ -10,8 +10,12 @@ from __future__ import annotations
 import pytest
 
 from app.engines.intent import IntentEngine
-from app.engines.providers.base import ProviderError
+from app.engines.providers.base import CompletionResult, ProviderCapabilities, ProviderError
 from app.schemas.catr import CanonicalAITask
+
+
+def _caps(name: str) -> ProviderCapabilities:
+    return ProviderCapabilities(provider=name, supports_streaming=False, is_real=False)
 
 
 class _FakeProvider:
@@ -23,9 +27,14 @@ class _FakeProvider:
         self._response = response
         self.calls = 0
 
-    async def complete_json(self, *, system: str, user: str, max_tokens: int = 400) -> str:
+    def capabilities(self) -> ProviderCapabilities:
+        return _caps(self.name)
+
+    async def complete(
+        self, *, model: str, prompt: str, system: str | None = None, **_: object
+    ) -> CompletionResult:
         self.calls += 1
-        return self._response
+        return CompletionResult(self._response, 1, 1, model, self.name)
 
 
 class _FailingProvider:
@@ -34,7 +43,12 @@ class _FailingProvider:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def complete_json(self, *, system: str, user: str, max_tokens: int = 400) -> str:
+    def capabilities(self) -> ProviderCapabilities:
+        return _caps(self.name)
+
+    async def complete(
+        self, *, model: str, prompt: str, system: str | None = None, **_: object
+    ) -> CompletionResult:
         self.calls += 1
         raise ProviderError("boom")
 

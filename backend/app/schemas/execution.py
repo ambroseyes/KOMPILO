@@ -26,7 +26,7 @@ class ExecutionRead(BaseModel):
 
     id: uuid.UUID
     tenant_id: uuid.UUID
-    prompt_version_id: uuid.UUID
+    prompt_version_id: uuid.UUID | None  # null for a standalone (raw-task) execution
     status: str
     input: dict[str, Any] | None
     output: dict[str, Any] | None

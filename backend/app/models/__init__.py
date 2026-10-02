@@ -3,6 +3,7 @@
 from app.db.base import Base
 from app.models.artifact import Artifact
 from app.models.execution import Execution
+from app.models.execution_step import ExecutionStep
 from app.models.organization import Organization
 from app.models.project import Project
 from app.models.prompt import Prompt, PromptVersion
@@ -19,5 +20,6 @@ __all__ = [
     "Prompt",
     "PromptVersion",
     "Execution",
+    "ExecutionStep",
     "Artifact",
 ]

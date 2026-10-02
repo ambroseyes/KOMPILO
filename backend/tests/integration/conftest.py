@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator
 import pytest_asyncio
 
 from app.core.queue import close_arq_pool
+from app.core.redis import close_redis
 from app.db.session import engine
 
 
@@ -20,6 +21,8 @@ from app.db.session import engine
 async def _fresh_engine_pool() -> AsyncIterator[None]:
     await engine.dispose()
     await close_arq_pool()
+    await close_redis()
     yield
     await engine.dispose()
     await close_arq_pool()
+    await close_redis()
