@@ -4,6 +4,14 @@
 execution strategy:
 *understand → strategize → compile → route → execute → verify → evaluate → improve*.
 
+You write what you want to accomplish; Kompilo figures out *how*: it understands the
+intent into a canonical task, surfaces what's ambiguous or missing, picks a strategy and a
+model, compiles a clean prompt, runs it through a single metered Gateway, verifies the
+output, and keeps every version comparable — all multi-tenant and deterministic at its core.
+
+- **Demo walkthrough:** [`GUIDE_DEMO.md`](GUIDE_DEMO.md) — a scripted, step-by-step tour.
+- **Honest limits:** [`LIMITES_CONNUES.md`](LIMITES_CONNUES.md) — every STUB + the V1.5 plan.
+
 ## Monorepo layout
 
 ```
@@ -25,15 +33,17 @@ execution strategy:
 └── docker-compose.yml    # postgres(pgvector) · redis · backend · worker · frontend
 ```
 
-> **Status:** the pipeline is live end to end. `understand` (heuristic Intent
-> Engine, `method="heuristic-v1"`), `strategize` (ambiguity · complexity · strategy ·
-> routing), `compile` (deterministic Prompt Compiler), and now **real execution** —
-> a model **Gateway** (semantic Redis cache, retries/fallback, real token cost), an
-> **Executor** that journals each step, **SSE streaming**, and an output **Verifier** —
-> are all real. When no `OPENAI_API_KEY` is set, execution runs through a deterministic
-> **offline Echo STUB** that is always flagged (`provider_is_real=false`); nothing
-> stubbed is ever presented as real. The surrounding architecture — database,
-> multi-tenant RLS isolation, migrations, async ARQ workers, tooling — is real too.
+> **Status (MVP):** real end to end for `understand` → `strategize` → `compile` →
+> `execute` → `verify`, plus the **prompt library + versioning** and an **8-axis
+> explainable diagnostic**. A model **Gateway** (semantic Redis cache, retries/fallback,
+> **real** token cost, idempotency) runs the plan; an **Executor** journals each step;
+> **SSE streaming** and an output **Verifier** close the loop. `evaluate` and `improve`
+> are **not yet implemented** (no measurement → version diffs stay verdict-free), and
+> `retrieve`/RAG is a **STUB**. When no `OPENAI_API_KEY` is set, execution runs through a
+> deterministic **offline Echo STUB**, always flagged (`provider_is_real=false`). Nothing
+> stubbed is ever presented as real — the full list is in
+> [`LIMITES_CONNUES.md`](LIMITES_CONNUES.md). The surrounding architecture (multi-tenant
+> RLS, migrations, async ARQ workers, tooling) is real.
 
 ## Prerequisites
 
@@ -67,6 +77,12 @@ migrations, then serves the API on **http://localhost:8000** and the frontend on
 **http://localhost:5173**.
 
 > To run only the backend stack: `docker compose up --build postgres redis backend worker`
+
+Then, for a ready-to-demo account + a few prompts (see [`GUIDE_DEMO.md`](GUIDE_DEMO.md)):
+
+```bash
+cd backend && python scripts/seed_demo.py   # prints the demo credentials
+```
 
 ### 3. (Alternative) Run the frontend locally
 
