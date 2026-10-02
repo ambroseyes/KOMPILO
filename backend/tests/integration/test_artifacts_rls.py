@@ -4,7 +4,7 @@ Requires a migrated database reachable as the app role (``kompilo_app``) via
 DATABASE_URL. Skips cleanly when no database is reachable, so the default
 ``pytest`` run (no DB) reports this as skipped, not failed.
 
-Run against a DISPOSABLE database (it creates and deletes two tenants):
+Run against a DISPOSABLE database:
 
     docker compose up -d postgres            # applies 01-init.sh (pgvector + app role)
     cd backend && alembic upgrade head        # as superuser (ALEMBIC_DATABASE_URL)
@@ -20,9 +20,10 @@ import httpx
 import pytest
 import sqlalchemy as sa
 
+from app.core.tenancy import apply_tenant_guc
 from app.db.session import engine, session_scope
 from app.main import app
-from app.models.tenant import Tenant
+from app.models.organization import Organization
 
 
 async def _db_reachable() -> bool:
@@ -34,21 +35,30 @@ async def _db_reachable() -> bool:
         return False
 
 
+async def _create_org(slug: str, name: str) -> uuid.UUID:
+    """Seed an organization. ``organizations`` is RLS'd on ``id``, so the GUC must
+    equal the new id for the INSERT's WITH CHECK to pass."""
+    org_id = uuid.uuid4()
+    async with session_scope() as s:
+        await apply_tenant_guc(s, org_id)
+        s.add(Organization(id=org_id, slug=slug, name=name))
+    return org_id
+
+
+async def _delete_org(org_id: uuid.UUID) -> None:
+    async with session_scope() as s:
+        await apply_tenant_guc(s, org_id)
+        await s.execute(sa.delete(Organization).where(Organization.id == org_id))
+
+
 @pytest.mark.asyncio
 async def test_artifacts_crud_and_isolation() -> None:
     if not await _db_reachable():
         pytest.skip("No database reachable at DATABASE_URL")
 
     suffix = uuid.uuid4().hex[:8]
-    slug_a, slug_b = f"a-{suffix}", f"b-{suffix}"
-
-    # Seed two tenants (control table, no RLS; app role has INSERT).
-    async with session_scope() as s:
-        tenant_a = Tenant(slug=slug_a, name="Tenant A")
-        tenant_b = Tenant(slug=slug_b, name="Tenant B")
-        s.add_all([tenant_a, tenant_b])
-        await s.flush()
-        tid_a, tid_b = str(tenant_a.id), str(tenant_b.id)
+    tid_a = str(await _create_org(f"a-{suffix}", "Org A"))
+    tid_b = str(await _create_org(f"b-{suffix}", "Org B"))
 
     transport = httpx.ASGITransport(app=app)
     try:
@@ -79,6 +89,5 @@ async def test_artifacts_crud_and_isolation() -> None:
             del_a = await client.delete(f"/v1/artifacts/{art_id}", headers={"X-Tenant-ID": tid_a})
             assert del_a.status_code == 204
     finally:
-        # Cleanup: deleting tenants cascades to artifacts.
-        async with session_scope() as s:
-            await s.execute(sa.delete(Tenant).where(Tenant.slug.in_([slug_a, slug_b])))
+        await _delete_org(uuid.UUID(tid_a))
+        await _delete_org(uuid.UUID(tid_b))

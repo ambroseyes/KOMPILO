@@ -110,26 +110,28 @@ The exact checks (commands + expected results) are in the task summary and below
 
 7. **Tenant isolation (RLS) quick check**
    ```bash
-   # Create a dev tenant, grab its id:
-   curl -s -X POST http://localhost:8000/v1/tenants \
+   # Create a dev organization (= tenant), grab its id:
+   curl -s -X POST http://localhost:8000/v1/organizations \
         -H 'Content-Type: application/json' \
         -d '{"slug":"acme","name":"Acme"}' | python3 -m json.tool
-   # List runs scoped to that tenant (empty list, RLS-filtered):
-   curl -s http://localhost:8000/v1/me/pipeline-runs \
-        -H 'X-Tenant-ID: <paste-tenant-id>'
+   # Its own org is visible when scoped to it:
+   curl -s http://localhost:8000/v1/organizations/me \
+        -H 'X-Tenant-ID: <paste-org-id>'
+   # Artifacts scoped to that tenant (empty list, RLS-filtered):
+   curl -s http://localhost:8000/v1/artifacts -H 'X-Tenant-ID: <paste-org-id>'
    ```
-   Expected: tenant created; the scoped list returns `[]` (and 401 without a tenant).
+   Expected: org created; the scoped artifacts list returns `[]` (and 401 without a tenant).
 
 ---
 
 ## Architecture notes
 
-- **Multi-tenant RLS.** The API connects as a least-privilege Postgres role
-  (`kompilo_app`, `NOSUPERUSER`) that is subject to Row-Level Security. Each
-  request pins the active tenant via `SET LOCAL app.current_tenant`; the
-  `pipeline_runs` table has an RLS policy filtering by `tenant_id`, so tenants
-  cannot read each other's rows. Migrations run as the superuser (`kompilo`),
-  which owns the tables.
+- **Multi-tenant RLS.** `organizations` is the tenant root. The API connects as a
+  least-privilege Postgres role (`kompilo_app`, `NOSUPERUSER`) subject to Row-Level
+  Security. Each request pins the active tenant via `SET LOCAL app.tenant_id`; every
+  tenant-owned table has an `ENABLE`+`FORCE` RLS policy filtering by `tenant_id`, so
+  tenants cannot read each other's rows. Migrations run as the superuser (`kompilo`),
+  which owns the tables. See the `kompilo-rls` skill.
 - **Secrets.** Never committed; everything flows through `.env` (git-ignored).
 - **STUB stages.** `backend/app/engines/stages.py` returns placeholder output
   until real reasoning is implemented. Nothing stubbed is presented as real.

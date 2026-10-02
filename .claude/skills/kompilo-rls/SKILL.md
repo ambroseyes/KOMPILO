@@ -6,7 +6,7 @@ description: >-
   writing an Alembic migration that touches tenant data, writing or auditing an
   RLS policy, wiring a new tenant-scoped endpoint, or debugging a suspected
   cross-tenant data leak. Triggers: multi-tenant, tenant isolation, RLS,
-  row-level security, tenant_id, SET LOCAL app.current_tenant, new tenant
+  row-level security, tenant_id, SET LOCAL app.tenant_id, new tenant
   table / migration / policy, "can tenant A see tenant B's rows".
 ---
 
@@ -16,11 +16,15 @@ This skill is the single source of truth for keeping tenants isolated. Follow it
 whenever tenant data is created, migrated, queried, or reviewed. A mistake here
 is a **silent** cross-tenant data leak — the system keeps working while leaking.
 
+Tenant root: **`organizations`** (`organizations.id` IS the tenant id). Every
+tenant-owned table carries `tenant_id` → `organizations.id`.
+
 Reference implementation already in the repo:
 - `backend/app/core/tenancy.py` — the GUC helper (`apply_tenant_guc`)
 - `backend/app/api/deps.py` — `get_tenant_session` (pins the tenant per request)
-- `backend/app/models/tenant.py` — `PipelineRun` (example tenant-scoped model)
-- `backend/app/migrations/versions/0001_initial.py` — the RLS policy
+- `backend/app/models/base.py` — `TenantMixin` (tenant_id → organizations) + `SoftDeleteMixin`
+- `backend/app/models/project.py` — example tenant-owned model
+- `backend/app/migrations/versions/0004_mvp_rls.py` — the RLS policies (ENABLE + FORCE)
 - `infra/postgres/init/01-init.sh` — the least-privilege `kompilo_app` role
 
 ---
@@ -32,10 +36,10 @@ Reference implementation already in the repo:
    the app must never connect as `kompilo` (superuser) or any table owner.
    Migrations (and only migrations) run as the superuser.
 2. **Every request pins its tenant inside a transaction** via
-   `SET LOCAL app.current_tenant = '<uuid>'` (done by `apply_tenant_guc`, called
+   `SET LOCAL app.tenant_id = '<uuid>'` (done by `apply_tenant_guc`, called
    from `get_tenant_session`). `SET LOCAL` is transaction-scoped and resets on
    commit/rollback — this is what makes connection pooling safe.
-3. **Fail-closed.** `current_setting('app.current_tenant', true)` returns `NULL`
+3. **Fail-closed.** `current_setting('app.tenant_id', true)` returns `NULL`
    when unset, so a policy comparing to it matches **zero rows**. The `true`
    (missing_ok) second argument is mandatory — without it an unset GUC raises.
 4. **Every tenant-scoped table has `tenant_id uuid NOT NULL`** plus a policy with
@@ -47,11 +51,12 @@ Reference implementation already in the repo:
 
 Do every step. Skipping one is how leaks happen.
 
-- [ ] Model: inherit the mixins and add `tenant_id: Mapped[uuid.UUID]`,
-      `nullable=False`, `index=True`, FK to `tenants.id` with `ondelete="CASCADE"`.
+- [ ] Model: inherit `TenantMixin` (adds `tenant_id` → `organizations.id`,
+      NOT NULL, indexed) + `TimestampMixin` + `SoftDeleteMixin` for content tables.
 - [ ] Register the model in `backend/app/models/__init__.py` (so Alembic sees it).
-- [ ] Migration: create the table, then `ENABLE ROW LEVEL SECURITY` and
-      `CREATE POLICY tenant_isolation ... USING (...) WITH CHECK (...)`.
+- [ ] Add composite indexes starting with `tenant_id` for your access paths.
+- [ ] Migration (RLS in its OWN migration): `ENABLE` + `FORCE ROW LEVEL SECURITY`
+      and `CREATE POLICY tenant_isolation ... USING (...) WITH CHECK (...)`.
 - [ ] Access the table **only** through `TenantSession` (`get_tenant_session`),
       never through the plain `DbSession` / `get_db`.
 - [ ] Never set `tenant_id` from client input on writes — take it from the
@@ -75,23 +80,20 @@ class Artifact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """TENANT-SCOPED — RLS policy created in the migration."""
     __tablename__ = "artifacts"
 
-    tenant_id: Mapped[uuid.UUID] = mapped_column(
-        PGUUID(as_uuid=True),
-        ForeignKey("tenants.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
+    __tablename__ = "artifacts"
+    # tenant_id comes from TenantMixin (FK -> organizations, NOT NULL, indexed)
     # ... business columns ...
 ```
 
-### 2. Migration — enable RLS + policy (run after `create_table`)
+### 2. Migration — enable RLS + policy (SEPARATE migration; after the table exists)
 ```python
 op.execute("ALTER TABLE artifacts ENABLE ROW LEVEL SECURITY")
+op.execute("ALTER TABLE artifacts FORCE ROW LEVEL SECURITY")
 op.execute(
     """
     CREATE POLICY tenant_isolation ON artifacts
-    USING      (tenant_id = current_setting('app.current_tenant', true)::uuid)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant', true)::uuid)
+    USING      (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
+    WITH CHECK (tenant_id = NULLIF(current_setting('app.tenant_id', true), '')::uuid)
     """
 )
 # downgrade(): op.execute("DROP POLICY IF EXISTS tenant_isolation ON artifacts")
@@ -132,8 +134,12 @@ async def list_artifacts(db: TenantSession) -> list[Artifact]:
    tenant's `tenant_id`. Always include both `USING` and `WITH CHECK`.
 5. **`tenant_id` nullable** → a NULL `tenant_id` interacts badly with a NULL GUC.
    Keep it `NOT NULL`.
-6. **Dropping the `true` in `current_setting('app.current_tenant', true)`** → an
+6. **Dropping the `true` in `current_setting('app.tenant_id', true)`** → an
    unset GUC raises instead of failing closed.
+6b. **Bare `current_setting(...)::uuid` without `NULLIF(..., '')`** → on a pooled
+   connection a prior `SET LOCAL` leaves the custom GUC as an EMPTY STRING after
+   reset (not NULL), so `''::uuid` RAISES on the next tenant-less query. Always
+   wrap: `NULLIF(current_setting('app.tenant_id', true), '')::uuid`.
 7. **Querying a tenant table via `DbSession`** (no GUC set) → RLS matches zero
    rows (fail-closed, so no leak) but the feature silently returns nothing. Use
    `TenantSession`.

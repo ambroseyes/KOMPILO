@@ -77,7 +77,7 @@ async def get_current_tenant_id(
 async def get_tenant_session(
     tenant_id: Annotated[uuid.UUID, Depends(get_current_tenant_id)],
 ) -> AsyncGenerator[AsyncSession, None]:
-    """Tenant-scoped DB session: pins ``app.current_tenant`` so RLS applies."""
+    """Tenant-scoped DB session: pins ``app.tenant_id`` so RLS applies."""
     set_current_tenant(tenant_id)
     async with async_session_factory() as session:
         await apply_tenant_guc(session, tenant_id)
