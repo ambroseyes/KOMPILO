@@ -139,14 +139,17 @@ coût est **réel** (tokens × prix du registre), distinct de l'estimation de co
 ```bash
 curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
      -H 'Content-Type: application/json' -d '{
-       "task":"Donne le profil d un client en JSON","output_format":"json",
+       "task":"Rédige la fiche d un client fictif nommé Dupont, avec son nom et son âge, au format JSON",
+       "output_format":"json",
        "output_schema":{"required":["name","age"],
                         "properties":{"name":{"type":"string"},"age":{"type":"integer"}}}
      }' | python3 -c "import sys,json;print(json.load(sys.stdin)['verification'])"
 ```
-**Ce que tu dois voir :** un rapport `verification` précis — `valid`, et si invalide la
-liste des `issues` (champ manquant → `path`, mauvais type → `type_mismatch`). Jamais un
-simple vrai/faux.
+**Ce que tu dois voir :** un rapport `verification` précis. Avec le STUB hors-ligne, la
+sortie JSON ne contient pas `name`/`age`, donc `valid:false` avec des `issues` pointant le
+problème exact — `kind:"missing_field"`, `path:"name"` puis `path:"age"`. Avec un vrai
+modèle qui renvoie ces champs, `valid:true`. Jamais un simple vrai/faux : on sait toujours
+*ce qui* manque ou cloche.
 
 ---
 

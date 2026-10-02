@@ -320,17 +320,18 @@ The exact checks (commands + expected results) are in the task summary and below
     ```bash
     curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
          -H 'Content-Type: application/json' -d '{
-           "task":"Donne le profil d un client en JSON",
+           "task":"Rédige la fiche d un client fictif nommé Dupont, avec son nom et son âge, au format JSON",
            "output_format":"json",
            "output_schema":{"required":["name","age"],
                             "properties":{"name":{"type":"string"},"age":{"type":"integer"}}}
          }' | python3 -c "import sys,json;print(json.load(sys.stdin)['verification'])"
     ```
     Expected: a `VerificationReport` with `valid` plus, when invalid, a precise list of
-    `issues[{kind, detail, path}]` (e.g. a missing `age` → `path:"age"`, kind
-    `missing_field`; a wrong type → kind `type_mismatch`) — never a bare pass/fail. The
-    JSON-Schema subset supported is `required` + property `type`, recursive into nested
-    objects and array items. See the `kompilo-gateway` skill.
+    `issues[{kind, detail, path}]`. With the offline STUB the JSON lacks `name`/`age`, so
+    `valid:false` with `kind:"missing_field"` on `path:"name"` then `"age"` (a wrong type
+    would be `kind:"type_mismatch"`) — never a bare pass/fail. The JSON-Schema subset is
+    `required` + property `type`, recursive into nested objects and array items. See the
+    `kompilo-gateway` skill.
 
 ---
 
