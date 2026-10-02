@@ -63,6 +63,9 @@ class PromptVersion(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDelete
         PGUUID(as_uuid=True), ForeignKey("prompts.id", ondelete="CASCADE"), nullable=False
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Raw human intent this version compiles from — the input the `understand`
+    # stage analyzes into `catr`. Nullable until supplied.
+    source_intent: Mapped[str | None] = mapped_column(Text, nullable=True)
     catr: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
     ir: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
     renders: Mapped[Any | None] = mapped_column(JSONB, nullable=True)

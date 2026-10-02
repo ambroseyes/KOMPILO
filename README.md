@@ -25,9 +25,12 @@ execution strategy:
 └── docker-compose.yml    # postgres(pgvector) · redis · backend · worker · frontend
 ```
 
-> **Status:** project skeleton. The pipeline stages are **STUB** implementations
-> (responses carry `is_stub: true`). The surrounding architecture — database,
-> multi-tenant RLS isolation, migrations, workers, tooling — is real, not mocked.
+> **Status:** project skeleton. The **`understand`** stage is now a real
+> deterministic analyzer (heuristic, `method="heuristic-v1"` — not an LLM); the
+> remaining pipeline stages are still **STUB** (the `/v1/compile` response carries
+> `is_stub: true` for the pipeline as a whole, but the `understand` trace entry is
+> no longer marked STUB). The surrounding architecture — database, multi-tenant RLS
+> isolation, migrations, async ARQ workers, tooling — is real, not mocked.
 
 ## Prerequisites
 
@@ -161,6 +164,26 @@ The exact checks (commands + expected results) are in the task summary and below
    Deleting a project/prompt is a **soft delete** (org admin only) that cascades to child
    prompts/versions; a slug can be reused after its owner is soft-deleted. See the
    `kompilo-crud` skill.
+
+10. **Understand stage (async via ARQ worker)** — analyze an intent into a CATR.
+    ```bash
+    # Create a version carrying the raw intent to analyze:
+    VERSION=$(curl -s -X POST http://localhost:8000/v1/prompts/$PROMPT/versions \
+         -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+         -d '{"source_intent":"Implémente une fonction Python qui parse un CSV"}' \
+         | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+    # Kick off the understand run (async → 202 Accepted, status pending):
+    EXEC=$(curl -s -X POST http://localhost:8000/v1/executions -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' -d "{\"prompt_version_id\":\"$VERSION\"}" \
+         | python3 -c "import sys,json;print(json.load(sys.stdin)['id'])")
+    # Poll until the worker finishes (status: pending → succeeded):
+    curl -s http://localhost:8000/v1/executions/$EXEC -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
+    ```
+    Expected: the execution moves to `"status": "succeeded"` and `output.catr` holds the
+    structured understanding (`task_type`, `entities`, `constraints`, `open_questions`,
+    `confidence`, `method: "heuristic-v1"`); the same CATR is written onto the prompt
+    version. The worker must be running (`docker compose up worker`). The analysis is a
+    deterministic heuristic, **not** an LLM — see the `kompilo-pipeline` skill.
 
 ---
 

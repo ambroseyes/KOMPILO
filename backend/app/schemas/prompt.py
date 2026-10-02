@@ -60,6 +60,8 @@ class PromptRead(BaseModel):
 # ── PromptVersion ────────────────────────────────────────────────────────────
 class PromptVersionCreate(BaseModel):
     # ``version`` is server-allocated (monotonic per prompt) — never client-set.
+    # ``source_intent`` is the raw human text the `understand` stage analyzes.
+    source_intent: str | None = Field(default=None, max_length=10_000)
     catr: dict[str, Any] | None = None
     ir: dict[str, Any] | None = None
     renders: dict[str, Any] | None = None
@@ -74,6 +76,7 @@ class PromptVersionRead(BaseModel):
     tenant_id: uuid.UUID
     prompt_id: uuid.UUID
     version: int
+    source_intent: str | None
     catr: dict[str, Any] | None
     ir: dict[str, Any] | None
     renders: dict[str, Any] | None

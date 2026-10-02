@@ -160,6 +160,7 @@ async def create_prompt_version(
         prompt_id=prompt_id,
         author_id=user.id,
         version=version,
+        source_intent=payload.source_intent,
         catr=payload.catr,
         ir=payload.ir,
         renders=payload.renders,
