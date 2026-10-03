@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1.routes import (
     artifacts,
     auth,
+    documents,
     execute,
     executions,
     health,
@@ -28,3 +29,4 @@ api_router.include_router(stream.router, tags=["executions"])
 api_router.include_router(execute.router, tags=["execute"])
 api_router.include_router(improve.router, tags=["improve"])
 api_router.include_router(artifacts.router, tags=["artifacts"])
+api_router.include_router(documents.router, tags=["documents"])

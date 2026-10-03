@@ -12,7 +12,13 @@ class _FakeExecutor:
     """Deterministic stand-in for the real Executor/Gateway (no network, no model)."""
 
     async def run(
-        self, *, plan: object, compiled_prompt: str, tenant_id: str, json_mode: bool = False
+        self,
+        *,
+        plan: object,
+        compiled_prompt: str,
+        tenant_id: str,
+        json_mode: bool = False,
+        retrieval_query: str | None = None,
     ) -> ExecutionOutcome:
         step = StepOutcome(
             order=1,

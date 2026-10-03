@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 from app.core.errors import KompiloError
 from app.engines.gateway import Gateway, GatewayResponse
+from app.engines.retriever import RetrievalResult, Retriever
 from app.schemas.compile import ExecutionPlan
 
 
@@ -59,11 +60,38 @@ class ExecutionOutcome:
 
 
 _RETRIEVAL_STUB = "[retrieval STUB — no corpus configured in v1]"
+_MAX_CONTEXT_CHARS = 4000
+
+
+def _format_context(result: RetrievalResult) -> str:
+    """Join retrieved chunks into a bounded, labelled context block for the prompt."""
+    blocks: list[str] = []
+    budget = _MAX_CONTEXT_CHARS
+    for i, chunk in enumerate(result.chunks, start=1):
+        snippet = chunk.content[:budget]
+        blocks.append(f"[{i}] {chunk.document_title}\n{snippet}")
+        budget -= len(snippet)
+        if budget <= 0:
+            break
+    return "\n\n".join(blocks)
+
+
+def _format_retrieval_output(result: RetrievalResult) -> str:
+    """Human-readable record of what retrieval found (journaled as the step output)."""
+    if not result.chunks:
+        return "[retrieval — aucun passage trouvé dans le corpus du tenant]"
+    lines = [
+        f"[{i}] {c.document_title} (score={c.score}) — {c.content[:160]}"
+        for i, c in enumerate(result.chunks, start=1)
+    ]
+    header = "Passages récupérés" + ("" if result.is_real else f" — {result.note}")
+    return header + ":\n" + "\n".join(lines)
 
 
 class Executor:
-    def __init__(self, gateway: Gateway | None = None) -> None:
+    def __init__(self, gateway: Gateway | None = None, retriever: Retriever | None = None) -> None:
         self._gateway = gateway or Gateway()
+        self._retriever = retriever
 
     async def run(
         self,
@@ -73,19 +101,26 @@ class Executor:
         tenant_id: str,
         system: str | None = None,
         json_mode: bool = False,
+        retrieval_query: str | None = None,
     ) -> ExecutionOutcome:
         model_ids = [m for m in [plan.target_model, *plan.fallback_models] if m]
         outcome = ExecutionOutcome(output="")
         last_text = ""
+        retrieved_context = ""
 
         for step in plan.steps:
             if step.action == "retrieve":
+                output = _RETRIEVAL_STUB
+                if self._retriever is not None:
+                    result = await self._retriever.retrieve(retrieval_query or compiled_prompt)
+                    retrieved_context = _format_context(result)
+                    output = _format_retrieval_output(result)
                 outcome.steps.append(
                     StepOutcome(
                         order=step.order,
                         action=step.action,
                         input_prompt=step.detail,
-                        output=_RETRIEVAL_STUB,
+                        output=output,
                         input_tokens=0,
                         output_tokens=0,
                         cost_usd=0.0,
@@ -97,8 +132,10 @@ class Executor:
                 continue
 
             prompt = compiled_prompt
+            if retrieved_context:
+                prompt = f"{compiled_prompt}\n\n<context>\n{retrieved_context}\n</context>"
             if step.order > 1:
-                prompt = f"{compiled_prompt}\n\nFocus on this step: {step.detail}"
+                prompt = f"{prompt}\n\nFocus on this step: {step.detail}"
 
             resp = await self._gateway.complete(
                 tenant_id=tenant_id,

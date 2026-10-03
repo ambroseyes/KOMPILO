@@ -20,6 +20,7 @@ from app.engines.evaluator import Evaluator
 from app.engines.executor import ExecutionOutcome, Executor
 from app.engines.improver import Improver
 from app.engines.kompilo_core import KompiloCore
+from app.engines.retriever import Retriever
 from app.engines.verifier import verify_output
 from app.schemas.catr import CanonicalAITask
 from app.schemas.compile import CompileMode, CompileResponse
@@ -44,12 +45,20 @@ class PipelineOutcome:
 
 
 class KompiloPipeline:
-    def __init__(self, core: KompiloCore | None = None, executor: Executor | None = None) -> None:
+    def __init__(
+        self,
+        core: KompiloCore | None = None,
+        executor: Executor | None = None,
+        retriever: Retriever | None = None,
+    ) -> None:
         self._core = core or KompiloCore()
         self._executor = executor  # injected in tests; built lazily otherwise
+        self._retriever = retriever  # tenant-scoped; enables real RAG retrieval
 
     def _make_executor(self) -> Executor:
-        return self._executor if self._executor is not None else Executor()
+        if self._executor is not None:
+            return self._executor
+        return Executor(retriever=self._retriever)
 
     async def run(
         self,
@@ -98,6 +107,7 @@ class KompiloPipeline:
             compiled_prompt=response.compiled_prompt.text,
             tenant_id=tenant_id,
             json_mode=json_mode,
+            retrieval_query=task,
         )
         trace.append({"stage": "execute", "status": "ok"})
 

@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     intent_llm_model: str = "gpt-4o-mini"  # light/cheap model for intent extraction
     # The Intent Engine calls the LLM ONLY when heuristic confidence is below this.
     intent_confidence_threshold: float = 0.6
+    # Embedding model for RAG (OpenAI-compatible /embeddings). Requested at
+    # EMBEDDING_DIM dims (see app.engines.providers.embeddings); offline otherwise.
+    embedding_model: str = "text-embedding-3-small"
 
     # ── Gateway / execution ──────────────────────────────────────────
     # Default model used by the Gateway/executor when none is routed.

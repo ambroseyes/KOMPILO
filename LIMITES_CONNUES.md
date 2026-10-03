@@ -17,6 +17,12 @@ statut `skipped`).
 - **Exécution** réelle via la Gateway : cache sémantique Redis, retries/fallback, **coût
   réel** (tokens × prix du registre), idempotence, journalisation par étape.
 - **Vérification** de format (JSON + sous-ensemble de JSON-Schema).
+- **RAG / récupération** : ingestion d'un corpus tenant-isolé (RLS), découpage,
+  embeddings et récupération vectorielle réelle via **pgvector** (`POST /v1/documents`,
+  `/v1/documents/search`) ; l'étape `retrieve` du pipeline s'ancre sur le corpus du tenant.
+  *Caveat honnête :* sans clé LLM, les embeddings sont un **proxy lexical hors-ligne**
+  (non sémantique), signalé `is_real:false` + `note` — la pertinence n'est alors pas
+  significative.
 - **Évaluation** mesurée (`Evaluator`, rules-v1 : critères pondérés avec preuves) et
   **amélioration** (`Improver` : suggestions tracées, dérivées de signaux mesurés).
 - **Pipeline unique** : `understand → stratégie → compiler → exécuter → vérifier →
@@ -31,7 +37,7 @@ statut `skipped`).
 | Zone | État actuel | Impact |
 |------|-------------|--------|
 | **Exécution sans clé LLM** | `EchoProvider` hors-ligne déterministe | La sortie n'est pas d'un vrai modèle. Signalé `provider_is_real:false` + `note`. Mets `OPENAI_API_KEY` pour un vrai modèle (OpenAI/Ollama/LM Studio). |
-| **Récupération / RAG** | Étape `retrieve` = STUB (`[retrieval STUB — no corpus configured]`) | Le routeur peut choisir la stratégie `rag`, mais aucune source n'est réellement récupérée. pgvector est en base, non câblé. |
+| **Embeddings sans clé LLM** | `OfflineHashEmbedder` : proxy lexical déterministe (hachage signé), non sémantique | La récupération fonctionne mais le classement n'est **pas sémantique**. Signalé `is_real:false` + `note`. Mets `OPENAI_API_KEY` pour de vrais embeddings (`text-embedding-3-*`). |
 | **Évaluer : mesure heuristique** | `Evaluator` réel, `method="rules-v1"` (couverture d'objectif, format, contraintes) | C'est une **vraie mesure reproductible**, mais un **proxy heuristique** — pas un juge LLM ni un harnais d'éval multi-cas. Suffisant pour un score par exécution, pas encore pour un classement A/B de versions. |
 | **Améliorer : suggestions, pas d'auto-réécriture** | `Improver` réel, suggestions tracées (`derived_from`) | Les suggestions sont **grounded** (dérivées de signaux mesurés), mais Kompilo ne **réécrit pas** encore automatiquement le prompt ni ne reboucle. |
 | **Streaming SSE** | Le texte **final** est redécoupé en morceaux de 48 caractères, puis diffusé | Progressif à l'affichage, mais ce n'est **pas** un vrai streaming de tokens du provider. |
@@ -55,11 +61,12 @@ reproductible) pour **classer deux versions** (transformer le diff neutre en com
 version est meilleure **et pourquoi, chiffres à l'appui** ».
 *Pré-requis déjà en place : pipeline unifié, evaluate/improve, versioning, coût réel.*
 
-### 2. **RAG réel** (corpus + embeddings via pgvector) — *impact : fort*
-Le routeur choisit déjà la stratégie `rag`, pgvector est déjà installé, mais l'étape
-`retrieve` est un STUB. Câbler l'ingestion d'un corpus, l'indexation vectorielle et une
-vraie récupération rendrait les tâches « ancrées sur une source » réellement fonctionnelles
-(et ferait passer l'axe de diagnostic « Qualité du contexte » du signalement à l'action).
+### 2. **RAG réel** (corpus + embeddings via pgvector) — ✅ *livré*
+Ingestion d'un corpus tenant-isolé (RLS), découpage, embeddings et récupération vectorielle
+réelle via pgvector (index HNSW cosinus) ; l'étape `retrieve` du pipeline s'ancre désormais
+sur le corpus du tenant au lieu du STUB. Routes `POST /v1/documents` (ingestion),
+`/v1/documents/search` (recherche). Caveat honnête : sans clé LLM les embeddings sont un
+proxy lexical hors-ligne (non sémantique), signalé `is_real:false`.
 
 ### 3. **Exécution de production** : vrai streaming de tokens + garde-fous — *impact : moyen-fort*
 Diffuser les **vrais tokens** du provider (au lieu de redécouper le texte final), et durcir
