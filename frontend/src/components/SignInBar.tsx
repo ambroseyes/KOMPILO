@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useT } from "../lib/i18n";
 
 /**
  * Compact sign-in for the authenticated areas (library). Holds the access token in
  * memory only. Shows a connected banner (with sign-out) once a token is set.
  */
 export function SignInBar() {
+  const t = useT();
   const { token, setToken, clear } = useAuth();
   const [orgSlug, setOrgSlug] = useState("");
   const [email, setEmail] = useState("");
@@ -17,13 +19,13 @@ export function SignInBar() {
   if (token) {
     return (
       <div className="flex items-center justify-between rounded-xl border border-ok/30 bg-ok/10 px-4 py-2 text-sm text-ok">
-        <span>Connecté — jeton actif (en mémoire uniquement).</span>
+        <span>{t("signin.connected")}</span>
         <button
           type="button"
           onClick={clear}
           className="rounded-md border border-ok/40 px-2 py-1 text-xs hover:bg-ok/10"
         >
-          Se déconnecter
+          {t("signin.signout")}
         </button>
       </div>
     );
@@ -56,33 +58,31 @@ export function SignInBar() {
       }}
       className="space-y-3 rounded-2xl border border-line bg-surface p-5"
     >
-      <p className="text-sm text-muted">
-        Connecte-toi pour accéder à ta bibliothèque de prompts (tenant isolé).
-      </p>
+      <p className="text-sm text-muted">{t("signin.intro")}</p>
       <div className="grid gap-2 sm:grid-cols-3">
         <input
           value={orgSlug}
           onChange={(e) => setOrgSlug(e.target.value)}
-          placeholder="org (slug)"
-          aria-label="Organisation (slug)"
+          placeholder={t("signin.org.ph")}
+          aria-label={t("signin.org.aria")}
           autoComplete="organization"
           className="rounded-lg border border-line bg-raised px-3 py-2 text-ink placeholder:text-subtle"
         />
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="email"
+          placeholder={t("signin.email.ph")}
           type="email"
-          aria-label="Email"
+          aria-label={t("signin.email.aria")}
           autoComplete="email"
           className="rounded-lg border border-line bg-raised px-3 py-2 text-ink placeholder:text-subtle"
         />
         <input
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="mot de passe"
+          placeholder={t("signin.password.ph")}
           type="password"
-          aria-label="Mot de passe"
+          aria-label={t("signin.password.aria")}
           autoComplete="current-password"
           className="rounded-lg border border-line bg-raised px-3 py-2 text-ink placeholder:text-subtle"
         />
@@ -97,7 +97,7 @@ export function SignInBar() {
         disabled={!canSubmit}
         className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {busy ? "Connexion…" : "Se connecter"}
+        {busy ? t("signin.submitting") : t("signin.submit")}
       </button>
     </form>
   );

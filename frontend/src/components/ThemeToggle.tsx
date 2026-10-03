@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useT } from "../lib/i18n";
 import { applyTheme, currentTheme, type Theme } from "../lib/theme";
 
 /**
@@ -7,6 +8,7 @@ import { applyTheme, currentTheme, type Theme } from "../lib/theme";
  * Affiche une lune en clair (pour proposer le sombre) et un soleil en sombre.
  */
 export function ThemeToggle() {
+  const t = useT();
   const [theme, setTheme] = useState<Theme>(() => currentTheme());
   const isDark = theme === "dark";
 
@@ -21,8 +23,8 @@ export function ThemeToggle() {
       type="button"
       onClick={toggle}
       aria-pressed={isDark}
-      aria-label={isDark ? "Activer le thème clair" : "Activer le thème sombre"}
-      title={isDark ? "Thème clair" : "Thème sombre"}
+      aria-label={isDark ? t("theme.toLight") : t("theme.toDark")}
+      title={isDark ? t("theme.light") : t("theme.dark")}
       className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-line bg-surface text-muted transition hover:border-accent hover:text-ink"
     >
       {isDark ? <SunIcon /> : <MoonIcon />}

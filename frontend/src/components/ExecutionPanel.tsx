@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { api, type ExecuteResponse } from "../lib/api";
 import { useExecutionStream } from "../hooks/useExecutionStream";
+import { useT } from "../lib/i18n";
 
 /**
  * Advanced: run the task through /v1/execute (authenticated) and stream the result
  * live. Requires an access token (the public compile screen is unauthenticated).
  */
 export function ExecutionPanel({ task }: { task: string }) {
+  const t = useT();
   const [token, setToken] = useState("");
   const [executionId, setExecutionId] = useState<string | null>(null);
   const [exec, setExec] = useState<ExecuteResponse | null>(null);
@@ -35,17 +37,14 @@ export function ExecutionPanel({ task }: { task: string }) {
 
   return (
     <div className="mt-3 space-y-3 text-sm">
-      <p className="text-muted">
-        Fonctionnalité avancée : exécute la tâche et diffuse le résultat en direct.
-        Nécessite un jeton d'accès (via <code>POST /v1/auth/login</code>).
-      </p>
+      <p className="text-muted">{t("exec.intro")}</p>
       <div className="flex flex-col gap-2 sm:flex-row">
         <input
           type="password"
           value={token}
           onChange={(e) => setToken(e.target.value)}
           placeholder="access_token"
-          aria-label="Jeton d'accès"
+          aria-label={t("exec.token.aria")}
           className="flex-1 rounded-lg border border-line bg-raised px-3 py-2 text-ink placeholder:text-subtle"
         />
         <button
@@ -54,7 +53,7 @@ export function ExecutionPanel({ task }: { task: string }) {
           disabled={!canRun}
           className="rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {starting ? "Démarrage…" : "Exécuter en streaming"}
+          {starting ? t("exec.starting") : t("exec.run")}
         </button>
       </div>
 
@@ -65,7 +64,7 @@ export function ExecutionPanel({ task }: { task: string }) {
       )}
 
       {exec?.status === "needs_clarification" && (
-        <p className="text-warn">Clarification nécessaire — précise la tâche puis réessaie.</p>
+        <p className="text-warn">{t("exec.needsClarification")}</p>
       )}
 
       {executionId && (
@@ -83,8 +82,8 @@ export function ExecutionPanel({ task }: { task: string }) {
                       : "bg-subtle")
               }
             />
-            flux : {stream.status}
-            {stream.steps.length > 0 && <> · {stream.steps.length} étape(s)</>}
+            {t("exec.stream")} {stream.status}
+            {stream.steps.length > 0 && <> · {t("exec.steps", { n: stream.steps.length })}</>}
           </div>
           <pre
             aria-live="polite"
@@ -98,11 +97,17 @@ export function ExecutionPanel({ task }: { task: string }) {
 
       {exec?.metadata && (
         <p className="text-xs text-muted">
-          Coût <span className="text-ok">réel</span> ~$
+          {t("result.cost")} <span className="text-ok">{t("exec.cost.real")}</span> ~$
           {exec.metadata.actual_cost.cost_usd.toFixed(6)} ·{" "}
-          {exec.metadata.cached ? "servi par le cache" : "exécuté"} ·{" "}
-          {exec.metadata.provider_is_real ? "modèle réel" : "STUB offline"}
-          {exec.verification && <> · vérification : {exec.verification.valid ? "conforme ✓" : exec.verification.summary}</>}
+          {exec.metadata.cached ? t("exec.cached") : t("exec.executed")} ·{" "}
+          {exec.metadata.provider_is_real ? t("exec.model.real") : t("exec.model.stub")}
+          {exec.verification && (
+            <>
+              {" "}
+              · {t("exec.verification")}{" "}
+              {exec.verification.valid ? t("exec.conform") : exec.verification.summary}
+            </>
+          )}
         </p>
       )}
 
@@ -127,9 +132,11 @@ export function ExecutionPanel({ task }: { task: string }) {
       {exec?.evaluation && (
         <div className="rounded-xl border border-line bg-raised p-3 text-xs">
           <p className="text-muted">
-            Évaluation <span className="text-subtle">(mesurée, {exec.evaluation.method})</span> :{" "}
-            score <span className="font-semibold text-ink">{exec.evaluation.score.toFixed(2)}</span>{" "}
-            · {exec.evaluation.passed ? "conforme ✓" : "non conforme"}
+            {t("exec.eval")}{" "}
+            <span className="text-subtle">{t("exec.eval.measured", { method: exec.evaluation.method })}</span>{" "}
+            : {t("exec.eval.score")}{" "}
+            <span className="font-semibold text-ink">{exec.evaluation.score.toFixed(2)}</span> ·{" "}
+            {exec.evaluation.passed ? t("exec.conform") : t("exec.eval.notConform")}
           </p>
           <div className="mt-1 flex flex-wrap gap-1">
             {exec.evaluation.criteria.map((c) => (
@@ -150,7 +157,7 @@ export function ExecutionPanel({ task }: { task: string }) {
 
       {exec?.improvements && exec.improvements.improvements.length > 0 && (
         <div className="rounded-xl border border-line bg-raised p-3 text-xs">
-          <p className="font-semibold text-muted">Améliorations suggérées</p>
+          <p className="font-semibold text-muted">{t("exec.improvements")}</p>
           <ul className="mt-1 space-y-1">
             {exec.improvements.improvements.map((im, i) => (
               <li key={`${im.target}-${i}`} className="text-muted">
