@@ -3,19 +3,52 @@
 @tailwind utilities;
 
 @layer base {
+  /* Light is the default theme (fond blanc). The dark variant is kept and
+     can be activated with <html data-theme="dark"> — nothing selects it today. */
   :root {
-    color-scheme: dark;
+    color-scheme: light;
+
+    --k-canvas: 255 255 255; /* #FFFFFF */
+    --k-surface: 255 255 255; /* #FFFFFF */
+    --k-raised: 244 246 250; /* #F4F6FA */
+    --k-line: 226 230 238; /* #E2E6EE */
+    --k-ink: 10 22 40; /* #0A1628 — bleu nuit */
+    --k-muted: 71 84 103; /* #475467 */
+    --k-subtle: 139 148 166; /* #8B94A6 */
+    --k-accent: 27 77 255; /* #1B4DFF — bleu vif */
+    --k-accent-ink: 21 64 214; /* #1540D6 — bleu en texte sur fond clair */
+    --k-ok: 4 120 87; /* #047857 */
+    --k-warn: 180 83 9; /* #B45309 */
+    --k-danger: 185 28 28; /* #B91C1C */
   }
+
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --k-canvas: 10 22 40; /* #0A1628 */
+    --k-surface: 14 30 56; /* #0E1E38 */
+    --k-raised: 19 41 74; /* #13294A */
+    --k-line: 30 51 87; /* #1E3357 */
+    --k-ink: 241 245 249; /* #F1F5F9 */
+    --k-muted: 148 163 184; /* #94A3B8 */
+    --k-subtle: 100 116 139; /* #64748B */
+    --k-accent: 27 77 255; /* #1B4DFF */
+    --k-accent-ink: 108 139 255; /* #6C8BFF */
+    --k-ok: 52 211 153; /* #34D399 */
+    --k-warn: 251 191 36; /* #FBBF24 */
+    --k-danger: 248 113 113; /* #F87171 */
+  }
+
   html,
   body,
   #root {
     height: 100%;
   }
   body {
-    @apply bg-kompilo-navy text-slate-100 antialiased;
+    @apply bg-canvas text-ink antialiased;
   }
   /* Visible focus ring for keyboard users (accessibility). */
   :focus-visible {
-    @apply outline-none ring-2 ring-kompilo-blue ring-offset-2 ring-offset-kompilo-navy;
+    @apply outline-none ring-2 ring-accent ring-offset-2 ring-offset-canvas;
   }
 }

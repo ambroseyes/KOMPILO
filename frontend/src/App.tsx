@@ -4,6 +4,7 @@ import { api, type CompileMode, type CompileResponse } from "./lib/api";
 import { CompileForm } from "./components/CompileForm";
 import { ExecutionPanel } from "./components/ExecutionPanel";
 import { LibraryPage } from "./components/LibraryPage";
+import { Logo } from "./components/Logo";
 import { ResultView } from "./components/ResultView";
 
 type View = "compile" | "library";
@@ -21,13 +22,11 @@ export default function App() {
     <div className="min-h-screen">
       <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-16">
         <header className="mb-8">
-          <h1 className="text-2xl font-bold tracking-tight text-white">
-            Kompilo<span className="text-kompilo-blue">.</span>
-          </h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <Logo className="text-2xl" />
+          <p className="mt-2 text-sm text-muted">
             AI Execution Intelligence — transforme une intention en stratégie d'exécution.
           </p>
-          <nav className="mt-4 flex gap-1 rounded-xl border border-kompilo-border bg-kompilo-panel p-1 text-sm">
+          <nav className="mt-4 flex gap-1 rounded-xl border border-line bg-surface p-1 text-sm">
             {(["compile", "library"] as const).map((v) => (
               <button
                 key={v}
@@ -36,8 +35,8 @@ export default function App() {
                 className={
                   "rounded-lg px-4 py-1.5 font-medium transition " +
                   (view === v
-                    ? "bg-kompilo-blue text-white"
-                    : "text-slate-400 hover:text-white")
+                    ? "bg-accent text-white"
+                    : "text-muted hover:text-ink")
                 }
               >
                 {v === "compile" ? "Compiler" : "Bibliothèque"}
@@ -62,9 +61,9 @@ export default function App() {
             {/* Live region so screen readers announce state changes. */}
             <div className="mt-6" aria-live="polite" aria-busy={mutation.isPending}>
               {mutation.isPending && (
-                <div className="rounded-2xl border border-kompilo-border bg-kompilo-panel p-6 text-slate-300">
+                <div className="rounded-2xl border border-line bg-surface p-6 text-muted">
                   <span className="inline-flex items-center gap-2">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-kompilo-blue" />
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
                     Compilation en cours…
                   </span>
                 </div>
@@ -73,19 +72,19 @@ export default function App() {
               {mutation.isError && (
                 <div
                   role="alert"
-                  className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-red-200"
+                  className="rounded-2xl border border-danger/40 bg-danger/10 p-6 text-danger"
                 >
                   <p className="font-semibold">La compilation a échoué.</p>
-                  <p className="mt-1 text-sm text-red-300/90">{mutation.error.message}</p>
+                  <p className="mt-1 text-sm text-danger">{mutation.error.message}</p>
                 </div>
               )}
 
               {mutation.isSuccess && <ResultView data={mutation.data} />}
 
               {mutation.isSuccess && mutation.data.questions.length === 0 && (
-                <details className="mt-4 rounded-2xl border border-kompilo-border bg-kompilo-panel p-5 sm:p-6">
-                  <summary className="cursor-pointer list-none text-sm font-semibold text-slate-300 hover:text-white">
-                    <span className="text-kompilo-blue-300">Exécution en direct</span> (avancé)
+                <details className="mt-4 rounded-2xl border border-line bg-surface p-5 sm:p-6">
+                  <summary className="cursor-pointer list-none text-sm font-semibold text-muted hover:text-ink">
+                    <span className="text-accent-ink">Exécution en direct</span> (avancé)
                   </summary>
                   <ExecutionPanel task={task} />
                 </details>
@@ -94,8 +93,8 @@ export default function App() {
           </>
         )}
 
-        <footer className="mt-12 text-center text-xs text-slate-600">
-          Kompilo · le cœur de compilation est déterministe · coûts affichés = estimés
+        <footer className="mt-12 text-center text-xs text-subtle">
+          KOMPILO · le cœur de compilation est déterministe · coûts affichés = estimés
         </footer>
       </main>
     </div>

@@ -30,8 +30,8 @@ export function VariantTabs({ renders, initial }: { renders: PromptRenders; init
                 className={
                   "rounded-lg px-3 py-1.5 text-xs font-medium transition " +
                   (selected
-                    ? "bg-kompilo-blue text-white"
-                    : "border border-kompilo-border bg-kompilo-raised text-slate-300 hover:text-white")
+                    ? "bg-accent text-white"
+                    : "border border-line bg-raised text-muted hover:text-ink")
                 }
               >
                 {LABEL[m]}
@@ -49,7 +49,7 @@ export function VariantTabs({ renders, initial }: { renders: PromptRenders; init
         id={`panel-${active}`}
         aria-labelledby={`tab-${active}`}
         tabIndex={0}
-        className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-xl border border-kompilo-border bg-kompilo-navy p-4 font-mono text-sm leading-relaxed text-slate-200"
+        className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap rounded-xl border border-line bg-raised p-4 font-mono text-sm leading-relaxed text-ink"
       >
         {text}
       </pre>

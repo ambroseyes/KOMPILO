@@ -16,12 +16,12 @@ export function SignInBar() {
 
   if (token) {
     return (
-      <div className="flex items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">
+      <div className="flex items-center justify-between rounded-xl border border-ok/30 bg-ok/10 px-4 py-2 text-sm text-ok">
         <span>Connecté — jeton actif (en mémoire uniquement).</span>
         <button
           type="button"
           onClick={clear}
-          className="rounded-md border border-emerald-400/40 px-2 py-1 text-xs hover:bg-emerald-400/10"
+          className="rounded-md border border-ok/40 px-2 py-1 text-xs hover:bg-ok/10"
         >
           Se déconnecter
         </button>
@@ -54,9 +54,9 @@ export function SignInBar() {
         e.preventDefault();
         if (canSubmit) void signIn();
       }}
-      className="space-y-3 rounded-2xl border border-kompilo-border bg-kompilo-panel p-5"
+      className="space-y-3 rounded-2xl border border-line bg-surface p-5"
     >
-      <p className="text-sm text-slate-300">
+      <p className="text-sm text-muted">
         Connecte-toi pour accéder à ta bibliothèque de prompts (tenant isolé).
       </p>
       <div className="grid gap-2 sm:grid-cols-3">
@@ -66,7 +66,7 @@ export function SignInBar() {
           placeholder="org (slug)"
           aria-label="Organisation (slug)"
           autoComplete="organization"
-          className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-slate-100 placeholder:text-slate-500"
+          className="rounded-lg border border-line bg-raised px-3 py-2 text-ink placeholder:text-subtle"
         />
         <input
           value={email}
@@ -75,7 +75,7 @@ export function SignInBar() {
           type="email"
           aria-label="Email"
           autoComplete="email"
-          className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-slate-100 placeholder:text-slate-500"
+          className="rounded-lg border border-line bg-raised px-3 py-2 text-ink placeholder:text-subtle"
         />
         <input
           value={password}
@@ -84,18 +84,18 @@ export function SignInBar() {
           type="password"
           aria-label="Mot de passe"
           autoComplete="current-password"
-          className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-slate-100 placeholder:text-slate-500"
+          className="rounded-lg border border-line bg-raised px-3 py-2 text-ink placeholder:text-subtle"
         />
       </div>
       {error && (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm text-danger">
           {error}
         </p>
       )}
       <button
         type="submit"
         disabled={!canSubmit}
-        className="rounded-lg bg-kompilo-blue px-4 py-2 text-sm font-semibold text-white transition hover:bg-kompilo-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+        className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {busy ? "Connexion…" : "Se connecter"}
       </button>

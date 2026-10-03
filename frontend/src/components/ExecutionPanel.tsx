@@ -35,7 +35,7 @@ export function ExecutionPanel({ task }: { task: string }) {
 
   return (
     <div className="mt-3 space-y-3 text-sm">
-      <p className="text-slate-400">
+      <p className="text-muted">
         Fonctionnalité avancée : exécute la tâche et diffuse le résultat en direct.
         Nécessite un jeton d'accès (via <code>POST /v1/auth/login</code>).
       </p>
@@ -46,41 +46,41 @@ export function ExecutionPanel({ task }: { task: string }) {
           onChange={(e) => setToken(e.target.value)}
           placeholder="access_token"
           aria-label="Jeton d'accès"
-          className="flex-1 rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-slate-100 placeholder:text-slate-500"
+          className="flex-1 rounded-lg border border-line bg-raised px-3 py-2 text-ink placeholder:text-subtle"
         />
         <button
           type="button"
           onClick={run}
           disabled={!canRun}
-          className="rounded-lg bg-kompilo-blue px-4 py-2 font-semibold text-white transition hover:bg-kompilo-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-lg bg-accent px-4 py-2 font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {starting ? "Démarrage…" : "Exécuter en streaming"}
         </button>
       </div>
 
       {startError && (
-        <p role="alert" className="text-red-300">
+        <p role="alert" className="text-danger">
           {startError}
         </p>
       )}
 
       {exec?.status === "needs_clarification" && (
-        <p className="text-amber-300">Clarification nécessaire — précise la tâche puis réessaie.</p>
+        <p className="text-warn">Clarification nécessaire — précise la tâche puis réessaie.</p>
       )}
 
       {executionId && (
-        <div className="rounded-xl border border-kompilo-border bg-kompilo-navy p-3">
-          <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
+        <div className="rounded-xl border border-line bg-raised p-3">
+          <div className="mb-2 flex items-center gap-2 text-xs text-muted">
             <span
               className={
                 "h-2 w-2 rounded-full " +
                 (stream.status === "streaming"
-                  ? "animate-pulse bg-kompilo-blue"
+                  ? "animate-pulse bg-accent"
                   : stream.status === "done"
-                    ? "bg-emerald-400"
+                    ? "bg-ok"
                     : stream.status === "error"
-                      ? "bg-red-400"
-                      : "bg-slate-500")
+                      ? "bg-danger"
+                      : "bg-subtle")
               }
             />
             flux : {stream.status}
@@ -88,17 +88,17 @@ export function ExecutionPanel({ task }: { task: string }) {
           </div>
           <pre
             aria-live="polite"
-            className="max-h-72 overflow-auto whitespace-pre-wrap font-mono text-sm text-slate-200"
+            className="max-h-72 overflow-auto whitespace-pre-wrap font-mono text-sm text-ink"
           >
             {stream.text || "…"}
           </pre>
-          {stream.error && <p className="mt-2 text-red-300">{stream.error}</p>}
+          {stream.error && <p className="mt-2 text-danger">{stream.error}</p>}
         </div>
       )}
 
       {exec?.metadata && (
-        <p className="text-xs text-slate-400">
-          Coût <span className="text-emerald-300">réel</span> ~$
+        <p className="text-xs text-muted">
+          Coût <span className="text-ok">réel</span> ~$
           {exec.metadata.actual_cost.cost_usd.toFixed(6)} ·{" "}
           {exec.metadata.cached ? "servi par le cache" : "exécuté"} ·{" "}
           {exec.metadata.provider_is_real ? "modèle réel" : "STUB offline"}
@@ -114,8 +114,8 @@ export function ExecutionPanel({ task }: { task: string }) {
               className={
                 "rounded border px-1.5 py-0.5 " +
                 (s.status === "ok"
-                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
-                  : "border-amber-500/30 bg-amber-500/10 text-amber-300")
+                  ? "border-ok/30 bg-ok/10 text-ok"
+                  : "border-warn/30 bg-warn/10 text-warn")
               }
             >
               {s.stage}
@@ -125,10 +125,10 @@ export function ExecutionPanel({ task }: { task: string }) {
       )}
 
       {exec?.evaluation && (
-        <div className="rounded-xl border border-kompilo-border bg-kompilo-navy p-3 text-xs">
-          <p className="text-slate-300">
-            Évaluation <span className="text-slate-500">(mesurée, {exec.evaluation.method})</span> :{" "}
-            score <span className="font-semibold text-slate-100">{exec.evaluation.score.toFixed(2)}</span>{" "}
+        <div className="rounded-xl border border-line bg-raised p-3 text-xs">
+          <p className="text-muted">
+            Évaluation <span className="text-subtle">(mesurée, {exec.evaluation.method})</span> :{" "}
+            score <span className="font-semibold text-ink">{exec.evaluation.score.toFixed(2)}</span>{" "}
             · {exec.evaluation.passed ? "conforme ✓" : "non conforme"}
           </p>
           <div className="mt-1 flex flex-wrap gap-1">
@@ -137,7 +137,7 @@ export function ExecutionPanel({ task }: { task: string }) {
                 key={c.name}
                 className={
                   "rounded px-1.5 py-0.5 " +
-                  (c.passed ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300")
+                  (c.passed ? "bg-ok/10 text-ok" : "bg-danger/10 text-danger")
                 }
                 title={c.detail}
               >
@@ -149,13 +149,13 @@ export function ExecutionPanel({ task }: { task: string }) {
       )}
 
       {exec?.improvements && exec.improvements.improvements.length > 0 && (
-        <div className="rounded-xl border border-kompilo-border bg-kompilo-navy p-3 text-xs">
-          <p className="font-semibold text-slate-300">Améliorations suggérées</p>
+        <div className="rounded-xl border border-line bg-raised p-3 text-xs">
+          <p className="font-semibold text-muted">Améliorations suggérées</p>
           <ul className="mt-1 space-y-1">
             {exec.improvements.improvements.map((im, i) => (
-              <li key={`${im.target}-${i}`} className="text-slate-400">
-                <span className="text-kompilo-blue-300">{im.target}</span> — {im.suggestion}{" "}
-                <span className="text-slate-600">({im.derived_from})</span>
+              <li key={`${im.target}-${i}`} className="text-muted">
+                <span className="text-accent-ink">{im.target}</span> — {im.suggestion}{" "}
+                <span className="text-subtle">({im.derived_from})</span>
               </li>
             ))}
           </ul>

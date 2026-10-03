@@ -6,9 +6,9 @@ type Tone = "good" | "warn" | "bad";
 const TONE: Record<DiagnosticLevel, Tone> = { high: "good", medium: "warn", low: "bad" };
 
 const TONE_CLASS: Record<Tone, string> = {
-  good: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  warn: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  bad: "bg-red-500/15 text-red-300 border-red-500/30",
+  good: "bg-ok/15 text-ok border-ok/30",
+  warn: "bg-warn/15 text-warn border-warn/30",
+  bad: "bg-danger/15 text-danger border-danger/30",
 };
 
 const LEVEL_LABEL: Record<DiagnosticLevel, string> = {
@@ -27,10 +27,10 @@ export function Diagnostics({ items }: { items: DiagnosticDimension[] }) {
       {items.map((d) => (
         <li
           key={d.dimension}
-          className="rounded-xl border border-kompilo-border bg-kompilo-navy p-3"
+          className="rounded-xl border border-line bg-raised p-3"
         >
           <div className="flex flex-wrap items-center gap-2">
-            <span className="w-40 shrink-0 text-sm font-semibold text-slate-200">{d.label}</span>
+            <span className="w-40 shrink-0 text-sm font-semibold text-ink">{d.label}</span>
             <span
               className={
                 "inline-block w-fit rounded-md border px-2 py-0.5 text-xs font-medium uppercase tracking-wide " +
@@ -39,15 +39,15 @@ export function Diagnostics({ items }: { items: DiagnosticDimension[] }) {
             >
               {LEVEL_LABEL[d.level]}
             </span>
-            <span className="text-sm text-slate-400">{d.detail}</span>
+            <span className="text-sm text-muted">{d.detail}</span>
           </div>
           {d.reason && (
-            <p className="mt-1 pl-1 text-xs text-slate-500">
-              <span className="font-semibold text-slate-400">Pourquoi :</span> {d.reason}
+            <p className="mt-1 pl-1 text-xs text-subtle">
+              <span className="font-semibold text-muted">Pourquoi :</span> {d.reason}
             </p>
           )}
           {d.recommendation && (
-            <p className="mt-0.5 pl-1 text-xs text-kompilo-blue-300">
+            <p className="mt-0.5 pl-1 text-xs text-accent-ink">
               <span className="font-semibold">Action :</span> {d.recommendation}
             </p>
           )}
