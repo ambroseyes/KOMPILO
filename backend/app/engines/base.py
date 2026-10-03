@@ -23,6 +23,8 @@ class StageResult:
     status: str  # "ok" | "skipped" | "error"
     note: str
     output: dict[str, Any] = field(default_factory=dict)
+    # True while the stage is a placeholder; a real stage sets this False.
+    is_stub: bool = True
 
 
 @dataclass

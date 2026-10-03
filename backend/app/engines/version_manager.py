@@ -195,6 +195,8 @@ class VersionManager:
             else None
         )
         renders_snapshot = response.renders.model_dump() if response.renders is not None else None
+        # Populate the compat ``content`` column with the selected render (if any).
+        content = response.compiled_prompt.text if response.compiled_prompt is not None else None
 
         version_num = await self.next_version(db, prompt_id)
         pv = PromptVersion(
@@ -203,6 +205,7 @@ class VersionManager:
             author_id=author_id,
             version=version_num,
             source_intent=req.source_intent or req.task,
+            content=content,
             catr=catr.model_dump(mode="json"),
             ir=ir_snapshot,
             renders=renders_snapshot,

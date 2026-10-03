@@ -11,7 +11,7 @@ version)`` constraint: version numbers are monotonic and never reused, even afte
 version is soft-deleted, so the allocator counts soft-deleted rows too.
 
 Revision ID: 0006_partial_unique_slugs
-Revises: 0005_auth_org_resolver
+Revises: 0006_prompt_version_content
 Create Date: 2026-10-02
 """
 
@@ -23,7 +23,9 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0006_partial_unique_slugs"
-down_revision: str | None = "0005_auth_org_resolver"
+# Chained after 0006_prompt_version_content (both once branched off 0005, creating
+# two Alembic heads; linearized here so `alembic upgrade head` is unambiguous).
+down_revision: str | None = "0006_prompt_version_content"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

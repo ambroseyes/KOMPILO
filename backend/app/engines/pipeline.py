@@ -12,8 +12,8 @@ logger = get_logger(__name__)
 
 
 class Pipeline:
-    def __init__(self, stages: list[Stage] | None = None) -> None:
-        self._stages = stages if stages is not None else DEFAULT_STAGES
+    def __init__(self, stages: list[Stage]) -> None:
+        self._stages = stages
 
     async def run(self, intent: str, context: dict[str, Any] | None = None) -> PipelineContext:
         ctx = PipelineContext(intent=intent, context=context or {})
@@ -29,5 +29,10 @@ class Pipeline:
         return ctx
 
 
+def build_default_pipeline() -> Pipeline:
+    """Build the canonical pipeline from the default ordered stages."""
+    return Pipeline(list(DEFAULT_STAGES))
+
+
 # Shared default instance.
-pipeline = Pipeline()
+pipeline = build_default_pipeline()

@@ -106,6 +106,7 @@ class PromptVersionCreate(BaseModel):
     # The pipeline payloads are opaque JSON snapshots (objects OR arrays), so they are
     # typed ``Any``: ``catr`` is an object, ``ir``/``diagnostics`` are arrays, etc.
     source_intent: str | None = Field(default=None, max_length=10_000)
+    content: str | None = None  # immutable rendered source (optional; compat column)
     catr: Any | None = None
     ir: Any | None = None
     renders: Any | None = None
@@ -121,6 +122,7 @@ class PromptVersionRead(BaseModel):
     prompt_id: uuid.UUID
     version: int
     source_intent: str | None
+    content: str | None
     catr: Any | None
     ir: Any | None
     renders: Any | None

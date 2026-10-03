@@ -97,7 +97,7 @@ async def _make_version(client: httpx.AsyncClient, token: str, *, source_intent:
         json={"slug": f"p-{suffix}", "name": "P"},
     )
     prompt_id = prompt.json()["id"]
-    body: dict[str, object] = {}
+    body: dict[str, object] = {"content": "You are a helpful assistant."}
     if source_intent is not None:
         body["source_intent"] = source_intent
     version = await client.post(
