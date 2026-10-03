@@ -28,7 +28,7 @@ from app.db.session import engine, session_scope
 from app.main import app
 from app.models.organization import Organization
 from app.models.prompt import PromptVersion
-from app.workers.tasks import run_understand_task, shutdown, startup
+from app.workers.tasks import run_pipeline_task, shutdown, startup
 
 _INTENT = "Implémente une fonction qui parse un fichier ventes.csv en Python"
 
@@ -140,10 +140,10 @@ async def test_understand_async_flow_and_isolation() -> None:
             exec_id = execution["id"]
             assert execution["status"] == "pending"
             assert execution["tenant_id"] == str(org_a)
-            assert execution["input"]["stage"] == "understand"
+            assert execution["input"]["stage"] == "pipeline"
 
-            # ── Worker logic (direct call) turns intent -> CATR ────────────────
-            result = await run_understand_task({}, exec_id, str(org_a))
+            # ── Worker logic (direct call) runs the FULL pipeline ──────────────
+            result = await run_pipeline_task({}, exec_id, str(org_a))
             assert result["status"] == "succeeded", result
 
             fetched = await client.get(f"/v1/executions/{exec_id}", headers=_bearer(member))
@@ -155,6 +155,10 @@ async def test_understand_async_flow_and_isolation() -> None:
             assert catr["domain"] == "software"
             assert catr["objective"]
             assert body["started_at"] is not None and body["finished_at"] is not None
+            # The single pipeline ran end to end — its per-stage trace is recorded,
+            # starting with understand.
+            trace = body["output"]["trace"]
+            assert trace and trace[0]["stage"] == "understand"
 
             # The CATR is also written back onto the prompt version (checked in DB,
             # tenant-scoped, since there is no raw-version GET that exposes catr here).
@@ -170,7 +174,7 @@ async def test_understand_async_flow_and_isolation() -> None:
                 "/v1/executions", headers=_bearer(member), json={"prompt_version_id": version_id}
             )
             pending_id = pending.json()["id"]
-            wrong_tenant = await run_understand_task({}, pending_id, str(org_b))
+            wrong_tenant = await run_pipeline_task({}, pending_id, str(org_b))
             assert wrong_tenant["status"] == "missing"  # invisible to tenant B
             still_pending = await client.get(
                 f"/v1/executions/{pending_id}", headers=_bearer(member)
@@ -193,7 +197,7 @@ async def test_understand_async_flow_and_isolation() -> None:
                 )
                 queued_id = queued.json()["id"]
                 worker = Worker(
-                    functions=[run_understand_task],
+                    functions=[run_pipeline_task],
                     redis_settings=get_redis_settings(),
                     on_startup=startup,
                     on_shutdown=shutdown,

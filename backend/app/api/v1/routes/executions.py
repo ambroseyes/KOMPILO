@@ -15,7 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, TenantSession, get_current_user
-from app.core.queue import enqueue_understand
+from app.core.queue import enqueue_pipeline
 from app.models.execution import Execution
 from app.models.prompt import PromptVersion
 from app.schemas.execution import ExecutionCreate, ExecutionRead
@@ -39,7 +39,7 @@ async def _get_active_version(db: AsyncSession, version_id: uuid.UUID) -> Prompt
     "/executions",
     response_model=ExecutionRead,
     status_code=status.HTTP_202_ACCEPTED,
-    summary="Run the understand stage over a prompt version (async)",
+    summary="Run the full pipeline over a prompt version (async)",
 )
 async def create_execution(
     payload: ExecutionCreate,
@@ -59,7 +59,7 @@ async def create_execution(
         created_by=user.id,
         prompt_version_id=version.id,
         status="pending",
-        input={"stage": "understand", "context": payload.context},
+        input={"stage": "pipeline", "context": payload.context},
     )
     db.add(execution)
     await db.flush()
@@ -67,7 +67,7 @@ async def create_execution(
 
     # Enqueue AFTER the response commits (BackgroundTasks run post-response), so the
     # worker never races the row's creation. tenant_id is pinned in the worker's GUC.
-    background.add_task(enqueue_understand, execution.id, user.tenant_id)
+    background.add_task(enqueue_pipeline, execution.id, user.tenant_id)
     return execution
 
 

@@ -19,7 +19,7 @@ from arq.connections import ArqRedis, RedisSettings
 from app.core.config import settings
 
 #: Must match the function name registered in ``app.workers.settings.WorkerSettings``.
-UNDERSTAND_TASK = "run_understand_task"
+PIPELINE_TASK = "run_pipeline_task"
 
 _pool: ArqRedis | None = None
 
@@ -42,7 +42,7 @@ async def close_arq_pool() -> None:
         _pool = None
 
 
-async def enqueue_understand(execution_id: uuid.UUID, tenant_id: uuid.UUID) -> None:
-    """Enqueue the understand job. Worker args are strings (JSON-serializable)."""
+async def enqueue_pipeline(execution_id: uuid.UUID, tenant_id: uuid.UUID) -> None:
+    """Enqueue the full-pipeline job. Worker args are strings (JSON-serializable)."""
     pool = await get_arq_pool()
-    await pool.enqueue_job(UNDERSTAND_TASK, str(execution_id), str(tenant_id))
+    await pool.enqueue_job(PIPELINE_TASK, str(execution_id), str(tenant_id))

@@ -33,16 +33,17 @@ output, and keeps every version comparable — all multi-tenant and deterministi
 └── docker-compose.yml    # postgres(pgvector) · redis · backend · worker · frontend
 ```
 
-> **Status (MVP):** real end to end for `understand` → `strategize` → `compile` →
-> `execute` → `verify`, plus the **prompt library + versioning** and an **8-axis
-> explainable diagnostic**. A model **Gateway** (semantic Redis cache, retries/fallback,
-> **real** token cost, idempotency) runs the plan; an **Executor** journals each step;
-> **SSE streaming** and an output **Verifier** close the loop. `evaluate` and `improve`
-> are **not yet implemented** (no measurement → version diffs stay verdict-free), and
-> `retrieve`/RAG is a **STUB**. When no `OPENAI_API_KEY` is set, execution runs through a
-> deterministic **offline Echo STUB**, always flagged (`provider_is_real=false`). Nothing
-> stubbed is ever presented as real — the full list is in
-> [`LIMITES_CONNUES.md`](LIMITES_CONNUES.md). The surrounding architecture (multi-tenant
+> **Status (MVP):** real end to end for the WHOLE pipeline — `understand → strategize →
+> compile → execute → verify → evaluate → improve` — orchestrated by a single
+> `KompiloPipeline` used by both `/v1/execute` (sync) and the `/v1/executions` worker
+> (async). Plus the **prompt library + versioning** and an **8-axis explainable
+> diagnostic**. A model **Gateway** (semantic Redis cache, retries/fallback, **real** token
+> cost, idempotency) runs the plan; **evaluate** produces a measured score (heuristic
+> rules-v1) and **improve** grounded suggestions. `retrieve`/RAG is still a **STUB**. When
+> no `OPENAI_API_KEY` is set, execution runs through a deterministic **offline Echo STUB**,
+> always flagged (`provider_is_real=false`). Nothing stubbed is ever presented as real —
+> the full list is in [`LIMITES_CONNUES.md`](LIMITES_CONNUES.md). The surrounding
+> architecture (multi-tenant
 > RLS, migrations, async ARQ workers, tooling) is real.
 
 ## Prerequisites
@@ -362,9 +363,13 @@ The exact checks (commands + expected results) are in the task summary and below
   categories (stopping early on policy/validation) then falls back; the Executor repairs a
   malformed JSON output once; the Verifier has the final say. Internals/secrets are never
   shown to the user.
+- **Single pipeline.** `backend/app/engines/orchestrator.py` (`KompiloPipeline`) is the one
+  full-lifecycle orchestrator (understand → … → evaluate → improve); `/v1/execute` and the
+  `/v1/executions` worker both call it and share one persistence path
+  (`services/execution_store.py`). `evaluate` is a measured heuristic (`rules-v1`),
+  `improve` emits grounded suggestions; `retrieve`/RAG stays a STUB. Nothing stubbed is
+  presented as real — see [`LIMITES_CONNUES.md`](LIMITES_CONNUES.md).
 - **Secrets.** Never committed; everything flows through `.env` (git-ignored).
-- **STUB stages.** `backend/app/engines/stages.py` returns placeholder output
-  until real reasoning is implemented. Nothing stubbed is presented as real.
 
 ## Useful commands
 

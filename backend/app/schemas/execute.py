@@ -13,6 +13,8 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.compile import CompileMode
+from app.schemas.evaluate import EvaluationReport
+from app.schemas.improve import ImprovementReport
 from app.schemas.verify import VerificationReport
 
 
@@ -81,3 +83,7 @@ class ExecuteResponse(BaseModel):
     questions: list[str]
     metadata: ExecuteMetadata | None
     verification: VerificationReport | None = None
+    evaluation: EvaluationReport | None = None
+    improvements: ImprovementReport | None = None
+    # Per-stage trace of the single pipeline (understand → … → improve).
+    trace: list[dict[str, str]] = Field(default_factory=list)
