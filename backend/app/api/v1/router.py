@@ -8,6 +8,7 @@ from app.api.v1.routes import (
     execute,
     executions,
     health,
+    improve,
     organizations,
     projects,
     prompts,
@@ -25,4 +26,5 @@ api_router.include_router(prompts.router, tags=["prompts"])
 api_router.include_router(executions.router, tags=["executions"])
 api_router.include_router(stream.router, tags=["executions"])
 api_router.include_router(execute.router, tags=["execute"])
+api_router.include_router(improve.router, tags=["improve"])
 api_router.include_router(artifacts.router, tags=["artifacts"])
