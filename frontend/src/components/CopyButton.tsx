@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useT } from "../lib/i18n";
 
-export function CopyButton({ text, label = "Copier" }: { text: string; label?: string }) {
+export function CopyButton({ text, label }: { text: string; label?: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -20,7 +22,7 @@ export function CopyButton({ text, label = "Copier" }: { text: string; label?: s
       aria-live="polite"
       className="rounded-lg border border-line bg-raised px-3 py-1.5 text-xs font-medium text-ink transition hover:border-accent hover:text-accent-ink"
     >
-      {copied ? "Copié ✓" : label}
+      {copied ? t("copy.done") : (label ?? t("copy.default"))}
     </button>
   );
 }

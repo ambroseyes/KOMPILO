@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { api, type PromptVersion, type VersionDiff } from "../lib/api";
+import { useT } from "../lib/i18n";
 
 /** A single prompt: its versions, a "save a compilation" action, and a neutral diff. */
 export function PromptDetail({
@@ -12,6 +13,7 @@ export function PromptDetail({
   promptId: string;
   onBack: () => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
 
   const promptQ = useQuery({
@@ -41,7 +43,7 @@ export function PromptDetail({
         onClick={onBack}
         className="text-sm text-accent-ink hover:text-ink"
       >
-        ← Retour à la bibliothèque
+        {t("detail.back")}
       </button>
 
       {promptQ.data && (
@@ -53,12 +55,12 @@ export function PromptDetail({
           </p>
           {promptQ.data.tags.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1">
-              {promptQ.data.tags.map((t) => (
+              {promptQ.data.tags.map((tag) => (
                 <span
-                  key={t}
+                  key={tag}
                   className="rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs text-accent-ink"
                 >
-                  {t}
+                  {tag}
                 </span>
               ))}
             </div>
@@ -68,15 +70,12 @@ export function PromptDetail({
 
       {/* Save a compilation → new version. */}
       <div className="rounded-2xl border border-line bg-surface p-5">
-        <h3 className="text-sm font-semibold text-ink">Sauvegarder une compilation</h3>
-        <p className="mt-1 text-xs text-muted">
-          Kompilo compile la tâche côté serveur et enregistre le résultat comme une nouvelle
-          version (catr, ir, renders, diagnostics).
-        </p>
+        <h3 className="text-sm font-semibold text-ink">{t("detail.save.title")}</h3>
+        <p className="mt-1 text-xs text-muted">{t("detail.save.hint")}</p>
         <textarea
           value={task}
           onChange={(e) => setTask(e.target.value)}
-          placeholder="Que veux-tu accomplir ?"
+          placeholder={t("detail.save.ph")}
           rows={2}
           className="mt-3 w-full rounded-lg border border-line bg-raised px-3 py-2 text-sm text-ink placeholder:text-subtle"
         />
@@ -87,7 +86,7 @@ export function PromptDetail({
             onClick={() => saveM.mutate()}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {saveM.isPending ? "Compilation…" : "Compiler & sauvegarder"}
+            {saveM.isPending ? t("form.submitting") : t("detail.save.submit")}
           </button>
           {saveM.isError && (
             <span role="alert" className="text-sm text-danger">
@@ -96,7 +95,7 @@ export function PromptDetail({
           )}
           {saveM.isSuccess && saveM.data.compile.questions.length > 0 && (
             <span className="text-sm text-warn">
-              Version {saveM.data.version.version} enregistrée — clarification suggérée.
+              {t("detail.save.saved", { n: saveM.data.version.version })}
             </span>
           )}
         </div>
@@ -105,13 +104,12 @@ export function PromptDetail({
       {/* Version history. */}
       <div className="rounded-2xl border border-line bg-surface p-5">
         <h3 className="text-sm font-semibold text-ink">
-          Versions {versions.length > 0 && <span className="text-subtle">({versions.length})</span>}
+          {t("detail.versions")}{" "}
+          {versions.length > 0 && <span className="text-subtle">({versions.length})</span>}
         </h3>
-        {versionsQ.isLoading && <p className="mt-2 text-sm text-muted">Chargement…</p>}
+        {versionsQ.isLoading && <p className="mt-2 text-sm text-muted">{t("detail.versions.loading")}</p>}
         {versions.length === 0 && !versionsQ.isLoading && (
-          <p className="mt-2 text-sm text-muted">
-            Aucune version — sauvegarde une compilation ci-dessus.
-          </p>
+          <p className="mt-2 text-sm text-muted">{t("detail.versions.empty")}</p>
         )}
         {versions.length > 0 && (
           <ul className="mt-3 space-y-2">
@@ -128,13 +126,16 @@ export function PromptDetail({
 }
 
 function VersionRow({ v }: { v: PromptVersion }) {
+  const t = useT();
   return (
     <li className="rounded-xl border border-line bg-raised p-3 text-sm">
       <div className="flex items-center justify-between">
         <span className="font-semibold text-ink">v{v.version}</span>
         <span className="text-xs text-subtle">{new Date(v.created_at).toLocaleString()}</span>
       </div>
-      {v.model_target && <p className="text-xs text-muted">modèle : {v.model_target}</p>}
+      {v.model_target && (
+        <p className="text-xs text-muted">{t("detail.version.model", { v: v.model_target })}</p>
+      )}
       {v.source_intent && (
         <p className="mt-1 line-clamp-2 text-xs text-muted">« {v.source_intent} »</p>
       )}
@@ -151,6 +152,7 @@ function DiffPanel({
   promptId: string;
   versions: PromptVersion[];
 }) {
+  const t = useT();
   const numbers = versions.map((v) => v.version);
   const [from, setFrom] = useState(numbers[numbers.length - 2]);
   const [to, setTo] = useState(numbers[numbers.length - 1]);
@@ -174,20 +176,20 @@ function DiffPanel({
 
   return (
     <div className="rounded-2xl border border-line bg-surface p-5">
-      <h3 className="text-sm font-semibold text-ink">Comparer deux versions</h3>
+      <h3 className="text-sm font-semibold text-ink">{t("detail.compare.title")}</h3>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-        <VersionSelect label="de" value={from} options={numbers} onChange={setFrom} />
-        <VersionSelect label="à" value={to} options={numbers} onChange={setTo} />
+        <VersionSelect label={t("detail.compare.from")} value={from} options={numbers} onChange={setFrom} />
+        <VersionSelect label={t("detail.compare.to")} value={to} options={numbers} onChange={setTo} />
         <button
           type="button"
           disabled={from === to || diffM.isPending}
           onClick={() => diffM.mutate()}
           className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {diffM.isPending ? "Comparaison…" : "Comparer"}
+          {diffM.isPending ? t("detail.compare.comparing") : t("detail.compare.submit")}
         </button>
       </div>
-      {from === to && <p className="mt-2 text-xs text-warn">Choisis deux versions différentes.</p>}
+      {from === to && <p className="mt-2 text-xs text-warn">{t("detail.compare.different")}</p>}
       {error && (
         <p role="alert" className="mt-2 text-sm text-danger">
           {error}
@@ -228,6 +230,7 @@ function VersionSelect({
 }
 
 function DiffView({ diff }: { diff: VersionDiff }) {
+  const t = useT();
   const changedFields = diff.catr_fields;
   const changedDiag = diff.diagnostics.filter((d) => d.changed);
   const changedRenders = diff.renders.filter((r) => r.changed);
@@ -241,7 +244,7 @@ function DiffView({ diff }: { diff: VersionDiff }) {
       {changedFields.length > 0 && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-subtle">
-            Champs CATR
+            {t("detail.diff.catr")}
           </h4>
           <ul className="mt-1 space-y-1">
             {changedFields.map((c) => (
@@ -257,7 +260,7 @@ function DiffView({ diff }: { diff: VersionDiff }) {
       {changedDiag.length > 0 && (
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wide text-subtle">
-            Diagnostic
+            {t("detail.diff.diagnostic")}
           </h4>
           <ul className="mt-1 space-y-1">
             {changedDiag.map((d) => (
@@ -273,7 +276,7 @@ function DiffView({ diff }: { diff: VersionDiff }) {
       {changedRenders.map((r) => (
         <details key={r.mode} className="rounded-lg border border-line bg-raised p-2">
           <summary className="cursor-pointer text-xs font-semibold text-muted">
-            Rendu « {r.mode} » (modifié)
+            {t("detail.diff.render", { mode: r.mode })}
           </summary>
           <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap font-mono text-xs text-muted">
             {r.unified_diff}
@@ -282,7 +285,7 @@ function DiffView({ diff }: { diff: VersionDiff }) {
       ))}
 
       {changedFields.length === 0 && changedDiag.length === 0 && changedRenders.length === 0 && (
-        <p className="text-muted">Aucune différence structurelle entre ces deux versions.</p>
+        <p className="text-muted">{t("detail.diff.none")}</p>
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { CompileMode, PromptRenders } from "../lib/api";
+import { useT } from "../lib/i18n";
 import { CopyButton } from "./CopyButton";
 
 const ORDER: CompileMode[] = ["compact", "professional", "expert"];
@@ -10,13 +11,14 @@ const LABEL: Record<CompileMode, string> = {
 };
 
 export function VariantTabs({ renders, initial }: { renders: PromptRenders; initial: CompileMode }) {
+  const t = useT();
   const [active, setActive] = useState<CompileMode>(initial);
   const text = renders[active];
 
   return (
     <div>
       <div className="flex items-center gap-2">
-        <div role="tablist" aria-label="Variantes de l'instruction" className="flex gap-1">
+        <div role="tablist" aria-label={t("variants.aria")} className="flex gap-1">
           {ORDER.map((m) => {
             const selected = active === m;
             return (

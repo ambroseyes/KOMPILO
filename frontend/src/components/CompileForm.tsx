@@ -1,5 +1,6 @@
 import type { KeyboardEvent } from "react";
 import type { CompileMode } from "../lib/api";
+import { useT } from "../lib/i18n";
 
 const MODES: CompileMode[] = ["compact", "professional", "expert"];
 const MODE_LABEL: Record<CompileMode, string> = {
@@ -18,6 +19,8 @@ interface Props {
 }
 
 export function CompileForm({ value, onChange, mode, onModeChange, onSubmit, isPending }: Props) {
+  const t = useT();
+
   function handleKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
@@ -34,7 +37,7 @@ export function CompileForm({ value, onChange, mode, onModeChange, onSubmit, isP
       className="rounded-2xl border border-line bg-surface p-5 shadow-sm sm:p-6"
     >
       <label htmlFor="task" className="block text-lg font-semibold text-ink sm:text-xl">
-        Que veux-tu accomplir&nbsp;?
+        {t("form.question")}
       </label>
       <textarea
         id="task"
@@ -42,12 +45,12 @@ export function CompileForm({ value, onChange, mode, onModeChange, onSubmit, isP
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
         rows={5}
-        placeholder="Ex. : Rédige un email de relance client courtois en 150 mots…"
+        placeholder={t("form.placeholder")}
         className="mt-3 w-full resize-y rounded-xl border border-line bg-raised p-4 text-base text-ink placeholder:text-subtle"
       />
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div role="group" aria-label="Mode de compilation" className="flex gap-1">
+        <div role="group" aria-label={t("form.mode.aria")} className="flex gap-1">
           {MODES.map((m) => (
             <button
               key={m}
@@ -71,10 +74,10 @@ export function CompileForm({ value, onChange, mode, onModeChange, onSubmit, isP
           disabled={isPending || !value.trim()}
           className="rounded-xl bg-accent px-6 py-2.5 text-base font-semibold text-white shadow-sm transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isPending ? "Compilation…" : "Compiler"}
+          {isPending ? t("form.submitting") : t("form.submit")}
         </button>
       </div>
-      <p className="mt-2 text-xs text-subtle">Astuce : Ctrl / ⌘ + Entrée pour compiler.</p>
+      <p className="mt-2 text-xs text-subtle">{t("form.hint")}</p>
     </form>
   );
 }
