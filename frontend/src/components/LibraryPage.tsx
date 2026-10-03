@@ -15,7 +15,7 @@ export function LibraryPage() {
     return (
       <div className="space-y-4">
         <SignInBar />
-        <p className="text-sm text-slate-500">
+        <p className="text-sm text-subtle">
           Astuce : utilise le compte créé par le script de démo (voir le GUIDE_DEMO).
         </p>
       </div>
@@ -86,7 +86,7 @@ function PromptBrowser({ token, onOpen }: { token: string; onOpen: (id: string) 
           }}
           placeholder="Rechercher (nom, slug, description)"
           aria-label="Recherche"
-          className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+          className="rounded-lg border border-line bg-raised px-3 py-2 text-sm text-ink placeholder:text-subtle"
         />
         <input
           value={tagsRaw}
@@ -96,7 +96,7 @@ function PromptBrowser({ token, onOpen }: { token: string; onOpen: (id: string) 
           }}
           placeholder="tags (séparés par des virgules)"
           aria-label="Filtrer par tags"
-          className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+          className="rounded-lg border border-line bg-raised px-3 py-2 text-sm text-ink placeholder:text-subtle"
         />
         <select
           value={projectId}
@@ -105,7 +105,7 @@ function PromptBrowser({ token, onOpen }: { token: string; onOpen: (id: string) 
             setOffset(0);
           }}
           aria-label="Filtrer par projet"
-          className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-sm text-slate-100"
+          className="rounded-lg border border-line bg-raised px-3 py-2 text-sm text-ink"
         >
           <option value="">Tous les projets</option>
           {(projectsQ.data ?? []).map((p) => (
@@ -117,14 +117,14 @@ function PromptBrowser({ token, onOpen }: { token: string; onOpen: (id: string) 
       </div>
 
       {promptsQ.isError && (
-        <p role="alert" className="text-sm text-red-300">
+        <p role="alert" className="text-sm text-danger">
           {(promptsQ.error as Error).message}
         </p>
       )}
 
       {/* List */}
       {page && page.items.length === 0 && (
-        <p className="text-sm text-slate-400">Aucun prompt ne correspond.</p>
+        <p className="text-sm text-muted">Aucun prompt ne correspond.</p>
       )}
       <ul className="space-y-2">
         {page?.items.map((p) => (
@@ -132,19 +132,19 @@ function PromptBrowser({ token, onOpen }: { token: string; onOpen: (id: string) 
             <button
               type="button"
               onClick={() => onOpen(p.id)}
-              className="w-full rounded-xl border border-kompilo-border bg-kompilo-panel p-4 text-left transition hover:border-kompilo-blue/50"
+              className="w-full rounded-xl border border-line bg-surface p-4 text-left transition hover:border-accent/50"
             >
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-100">{p.name}</span>
-                <code className="text-xs text-slate-500">{p.slug}</code>
+                <span className="font-semibold text-ink">{p.name}</span>
+                <code className="text-xs text-subtle">{p.slug}</code>
               </div>
-              {p.description && <p className="mt-1 text-sm text-slate-400">{p.description}</p>}
+              {p.description && <p className="mt-1 text-sm text-muted">{p.description}</p>}
               {p.tags.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {p.tags.map((t) => (
                     <span
                       key={t}
-                      className="rounded-md border border-kompilo-blue/30 bg-kompilo-blue/10 px-2 py-0.5 text-xs text-kompilo-blue-300"
+                      className="rounded-md border border-accent/30 bg-accent/10 px-2 py-0.5 text-xs text-accent-ink"
                     >
                       {t}
                     </span>
@@ -158,7 +158,7 @@ function PromptBrowser({ token, onOpen }: { token: string; onOpen: (id: string) 
 
       {/* Pagination */}
       {page && page.total > 0 && (
-        <div className="flex items-center justify-between text-sm text-slate-400">
+        <div className="flex items-center justify-between text-sm text-muted">
           <span>
             {offset + 1}–{Math.min(offset + PAGE_SIZE, page.total)} sur {page.total}
           </span>
@@ -167,7 +167,7 @@ function PromptBrowser({ token, onOpen }: { token: string; onOpen: (id: string) 
               type="button"
               disabled={!hasPrev}
               onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              className="rounded-md border border-kompilo-border px-3 py-1 disabled:opacity-40"
+              className="rounded-md border border-line px-3 py-1 disabled:opacity-40"
             >
               Précédent
             </button>
@@ -175,7 +175,7 @@ function PromptBrowser({ token, onOpen }: { token: string; onOpen: (id: string) 
               type="button"
               disabled={!hasNext}
               onClick={() => setOffset(offset + PAGE_SIZE)}
-              className="rounded-md border border-kompilo-border px-3 py-1 disabled:opacity-40"
+              className="rounded-md border border-line px-3 py-1 disabled:opacity-40"
             >
               Suivant
             </button>
@@ -219,13 +219,13 @@ function NewPromptForm({ token, projects }: { token: string; projects: Project[]
     <details
       open={open}
       onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}
-      className="rounded-2xl border border-kompilo-border bg-kompilo-panel p-4"
+      className="rounded-2xl border border-line bg-surface p-4"
     >
-      <summary className="cursor-pointer text-sm font-semibold text-slate-300">
+      <summary className="cursor-pointer text-sm font-semibold text-muted">
         + Nouveau prompt
       </summary>
       {projects.length === 0 ? (
-        <p className="mt-3 text-sm text-amber-300">
+        <p className="mt-3 text-sm text-warn">
           Crée d'abord un projet (via l'API ou le script de démo).
         </p>
       ) : (
@@ -235,7 +235,7 @@ function NewPromptForm({ token, projects }: { token: string; projects: Project[]
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
               aria-label="Projet"
-              className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-sm text-slate-100"
+              className="rounded-lg border border-line bg-raised px-3 py-2 text-sm text-ink"
             >
               <option value="">Choisir un projet…</option>
               {projects.map((p) => (
@@ -249,25 +249,25 @@ function NewPromptForm({ token, projects }: { token: string; projects: Project[]
               onChange={(e) => setSlug(e.target.value)}
               placeholder="slug (ex. welcome-email)"
               aria-label="Slug"
-              className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+              className="rounded-lg border border-line bg-raised px-3 py-2 text-sm text-ink placeholder:text-subtle"
             />
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="nom"
               aria-label="Nom"
-              className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+              className="rounded-lg border border-line bg-raised px-3 py-2 text-sm text-ink placeholder:text-subtle"
             />
             <input
               value={tagsRaw}
               onChange={(e) => setTagsRaw(e.target.value)}
               placeholder="tags (virgules)"
               aria-label="Tags"
-              className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500"
+              className="rounded-lg border border-line bg-raised px-3 py-2 text-sm text-ink placeholder:text-subtle"
             />
           </div>
           {createM.isError && (
-            <p role="alert" className="text-sm text-red-300">
+            <p role="alert" className="text-sm text-danger">
               {(createM.error as Error).message}
             </p>
           )}
@@ -275,7 +275,7 @@ function NewPromptForm({ token, projects }: { token: string; projects: Project[]
             type="button"
             disabled={!canSubmit}
             onClick={() => createM.mutate()}
-            className="rounded-lg bg-kompilo-blue px-4 py-2 text-sm font-semibold text-white transition hover:bg-kompilo-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {createM.isPending ? "Création…" : "Créer"}
           </button>

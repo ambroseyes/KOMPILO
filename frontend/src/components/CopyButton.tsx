@@ -18,7 +18,7 @@ export function CopyButton({ text, label = "Copier" }: { text: string; label?: s
       type="button"
       onClick={copy}
       aria-live="polite"
-      className="rounded-lg border border-kompilo-border bg-kompilo-raised px-3 py-1.5 text-xs font-medium text-slate-200 transition hover:border-kompilo-blue-300 hover:text-white"
+      className="rounded-lg border border-line bg-raised px-3 py-1.5 text-xs font-medium text-ink transition hover:border-accent hover:text-accent-ink"
     >
       {copied ? "Copié ✓" : label}
     </button>
