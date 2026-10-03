@@ -23,9 +23,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, OrgAdmin, TenantSession, get_current_user
+from app.engines.version_comparator import ComparatorError, VersionComparator, VersionUnderTest
 from app.engines.version_manager import VersionManager
 from app.models.project import Project
 from app.models.prompt import Prompt, PromptVersion
+from app.schemas.benchmark import CompareRequest, VersionComparison
 from app.schemas.common import Page
 from app.schemas.prompt import (
     PromptCreate,
@@ -43,6 +45,39 @@ from app.schemas.version import (
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 _versions = VersionManager()
+_comparator = VersionComparator()
+
+
+async def _load_version_under_test(
+    db: AsyncSession, prompt_id: uuid.UUID, version: int
+) -> VersionUnderTest:
+    """Load a version and project it to the compiled prompt a comparison executes.
+
+    Prefers the stored ``content`` (the render selected at save time); falls back to any
+    available render. A version with no compiled prompt (e.g. created before the compiler)
+    cannot be executed, so the comparison is refused with a 422 rather than guessing.
+    """
+    stmt = select(PromptVersion).where(
+        PromptVersion.prompt_id == prompt_id,
+        PromptVersion.version == version,
+        PromptVersion.deleted_at.is_(None),
+    )
+    pv = (await db.execute(stmt)).scalars().first()
+    if pv is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=f"Version {version} not found"
+        )
+    text = pv.content
+    if not text and isinstance(pv.renders, dict):
+        text = (
+            pv.renders.get("professional") or pv.renders.get("compact") or pv.renders.get("expert")
+        )
+    if not text:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Version {version} has no compiled prompt to execute",
+        )
+    return VersionUnderTest(version=pv.version, prompt_text=text, source_intent=pv.source_intent)
 
 
 async def _get_active_project(db: AsyncSession, project_id: uuid.UUID) -> Project:
@@ -309,6 +344,34 @@ async def diff_prompt_versions(
     coerced to an int. The diff is neutral — it never says which version is 'better'."""
     await _get_active_prompt(db, prompt_id)
     return await _versions.diff(db, prompt_id, from_version, to_version)
+
+
+@router.post(
+    "/prompts/{prompt_id}/versions/compare",
+    response_model=VersionComparison,
+    summary="Measured comparison of two versions (which is better, by how much, regressions)",
+)
+async def compare_prompt_versions(
+    prompt_id: uuid.UUID,
+    payload: CompareRequest,
+    user: CurrentUser,
+    db: TenantSession,
+) -> VersionComparison:
+    """Run each version's compiled prompt over the same case set, measure with the Evaluator
+    (rules-v1), and return a numbers-backed verdict. Unlike the neutral diff, this ranks the
+    versions — honestly flagged as not meaningful when the offline Echo STUB produced the
+    outputs (no real provider key)."""
+    await _get_active_prompt(db, prompt_id)
+    a = await _load_version_under_test(db, prompt_id, payload.from_version)
+    b = await _load_version_under_test(db, prompt_id, payload.to_version)
+    try:
+        return await _comparator.compare(
+            prompt_id=prompt_id, a=a, b=b, cases=payload.cases, tenant_id=str(user.tenant_id)
+        )
+    except ComparatorError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
 
 @router.get(
