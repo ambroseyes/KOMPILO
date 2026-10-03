@@ -58,6 +58,9 @@ jobs:
       JWT_SECRET: ci-dummy-jwt-secret-0123456789ab
       DATABASE_URL: postgresql+asyncpg://kompilo_app:app_pw@localhost:5432/kompilo
       ALEMBIC_DATABASE_URL: postgresql+asyncpg://kompilo:kompilo_pw@localhost:5432/kompilo
+      # ARQ task queue + Gateway semantic cache. The integration suite exercises
+      # the async pipeline (POST /executions) and the cache, both backed by Redis.
+      REDIS_URL: redis://localhost:6379/0
     services:
       postgres:
         image: pgvector/pgvector:pg16
@@ -69,6 +72,15 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U kompilo -d kompilo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
