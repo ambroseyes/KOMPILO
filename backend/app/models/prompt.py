@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,6 +36,11 @@ class Prompt(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDeleteMixin, 
     slug: Mapped[str] = mapped_column(String(63), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Free-form labels for library organization/filtering (tenant-scoped via RLS).
+    # GIN-indexed text[]; defaults to an empty array (see migration 0010).
+    tags: Mapped[list[str]] = mapped_column(
+        ARRAY(String(63)), nullable=False, server_default=text("'{}'::text[]")
+    )
     created_by: Mapped[uuid.UUID | None] = mapped_column(
         PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
@@ -66,11 +71,10 @@ class PromptVersion(UUIDPrimaryKeyMixin, TenantMixin, TimestampMixin, SoftDelete
     # Raw human intent this version compiles from — the input the `understand`
     # stage analyzes into `catr`. Nullable until supplied.
     source_intent: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Immutable source of this version: once a version is created its ``content``
-    # and ``version`` never change — a new revision means a brand-new version row.
-    # (The pipeline MAY later fill the JSONB outputs below; those are derived, not
-    # the versioned source.)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # Immutable rendered source of this version. Kept for compatibility (added in
+    # 0006, relaxed to nullable in 0011); populated from the selected render when
+    # a compilation is saved.
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     catr: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
     ir: Mapped[Any | None] = mapped_column(JSONB, nullable=True)
     renders: Mapped[Any | None] = mapped_column(JSONB, nullable=True)

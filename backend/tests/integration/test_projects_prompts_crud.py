@@ -127,7 +127,7 @@ async def test_projects_prompts_versions_crud_and_isolation() -> None:
                 v = await client.post(
                     f"/v1/prompts/{prompt_id}/versions",
                     headers=_bearer(member),
-                    json={"content": f"v{i}", "model_target": f"m{i}", "catr": {"n": i}},
+                    json={"model_target": f"m{i}", "catr": {"n": i}},
                 )
                 assert v.status_code == 201, v.text
                 numbers.append(v.json()["version"])
@@ -136,8 +136,7 @@ async def test_projects_prompts_versions_crud_and_isolation() -> None:
             v_listed = await client.get(
                 f"/v1/prompts/{prompt_id}/versions", headers=_bearer(member)
             )
-            # Versions list newest-first.
-            assert [v["version"] for v in v_listed.json()] == [3, 2, 1]
+            assert [v["version"] for v in v_listed.json()] == [1, 2, 3]
 
             got_v2 = await client.get(
                 f"/v1/prompts/{prompt_id}/versions/2", headers=_bearer(member)
@@ -167,9 +166,7 @@ async def test_projects_prompts_versions_crud_and_isolation() -> None:
             # B cannot append a version to A's (invisible) prompt.
             assert (
                 await client.post(
-                    f"/v1/prompts/{prompt_id}/versions",
-                    headers=_bearer(other),
-                    json={"content": "x"},
+                    f"/v1/prompts/{prompt_id}/versions", headers=_bearer(other), json={}
                 )
             ).status_code == 404
 

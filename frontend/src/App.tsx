@@ -1,50 +1,103 @@
-import { useQuery } from "@tanstack/react-query";
-import { api } from "./lib/api";
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+import { api, type CompileMode, type CompileResponse } from "./lib/api";
+import { CompileForm } from "./components/CompileForm";
+import { ExecutionPanel } from "./components/ExecutionPanel";
+import { LibraryPage } from "./components/LibraryPage";
+import { ResultView } from "./components/ResultView";
+
+type View = "compile" | "library";
 
 export default function App() {
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["health"],
-    queryFn: api.health,
+  const [view, setView] = useState<View>("compile");
+  const [task, setTask] = useState("");
+  const [mode, setMode] = useState<CompileMode>("professional");
+
+  const mutation = useMutation<CompileResponse, Error, void>({
+    mutationFn: () => api.compile({ task: task.trim(), mode }),
   });
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-lg rounded-2xl border border-slate-800 bg-slate-900/60 p-8 shadow-xl">
-        <h1 className="text-3xl font-bold tracking-tight">Kompilo</h1>
-        <p className="mt-1 text-sm text-slate-400">AI Execution Intelligence</p>
+    <div className="min-h-screen">
+      <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-16">
+        <header className="mb-8">
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            Kompilo<span className="text-kompilo-blue">.</span>
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            AI Execution Intelligence — transforme une intention en stratégie d'exécution.
+          </p>
+          <nav className="mt-4 flex gap-1 rounded-xl border border-kompilo-border bg-kompilo-panel p-1 text-sm">
+            {(["compile", "library"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className={
+                  "rounded-lg px-4 py-1.5 font-medium transition " +
+                  (view === v
+                    ? "bg-kompilo-blue text-white"
+                    : "text-slate-400 hover:text-white")
+                }
+              >
+                {v === "compile" ? "Compiler" : "Bibliothèque"}
+              </button>
+            ))}
+          </nav>
+        </header>
 
-        <div className="mt-6">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-            Backend health
-          </h2>
+        {view === "library" && <LibraryPage />}
 
-          {isLoading && <p className="mt-2 text-slate-300">Checking…</p>}
+        {view === "compile" && (
+          <>
+            <CompileForm
+              value={task}
+              onChange={setTask}
+              mode={mode}
+              onModeChange={setMode}
+              onSubmit={() => mutation.mutate()}
+              isPending={mutation.isPending}
+            />
 
-          {isError && (
-            <p className="mt-2 text-red-400">Unreachable: {(error as Error).message}</p>
-          )}
+            {/* Live region so screen readers announce state changes. */}
+            <div className="mt-6" aria-live="polite" aria-busy={mutation.isPending}>
+              {mutation.isPending && (
+                <div className="rounded-2xl border border-kompilo-border bg-kompilo-panel p-6 text-slate-300">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-kompilo-blue" />
+                    Compilation en cours…
+                  </span>
+                </div>
+              )}
 
-          {data && (
-            <ul className="mt-3 space-y-2">
-              <li className="flex items-center gap-2">
-                <span className={data.status === "ok" ? "text-emerald-400" : "text-amber-400"}>
-                  {data.status === "ok" ? "●" : "○"}
-                </span>
-                <span className="text-slate-300">status</span>
-                <span className="text-slate-400">{data.status}</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <span className={data.db === "ok" ? "text-emerald-400" : "text-red-400"}>
-                  {data.db === "ok" ? "●" : "○"}
-                </span>
-                <span className="text-slate-300">database</span>
-                <span className="text-slate-400">{data.db}</span>
-              </li>
-              <li className="text-xs text-slate-500">version {data.version}</li>
-            </ul>
-          )}
-        </div>
-      </div>
+              {mutation.isError && (
+                <div
+                  role="alert"
+                  className="rounded-2xl border border-red-500/40 bg-red-500/10 p-6 text-red-200"
+                >
+                  <p className="font-semibold">La compilation a échoué.</p>
+                  <p className="mt-1 text-sm text-red-300/90">{mutation.error.message}</p>
+                </div>
+              )}
+
+              {mutation.isSuccess && <ResultView data={mutation.data} />}
+
+              {mutation.isSuccess && mutation.data.questions.length === 0 && (
+                <details className="mt-4 rounded-2xl border border-kompilo-border bg-kompilo-panel p-5 sm:p-6">
+                  <summary className="cursor-pointer list-none text-sm font-semibold text-slate-300 hover:text-white">
+                    <span className="text-kompilo-blue-300">Exécution en direct</span> (avancé)
+                  </summary>
+                  <ExecutionPanel task={task} />
+                </details>
+              )}
+            </div>
+          </>
+        )}
+
+        <footer className="mt-12 text-center text-xs text-slate-600">
+          Kompilo · le cœur de compilation est déterministe · coûts affichés = estimés
+        </footer>
+      </main>
     </div>
   );
 }

@@ -1,41 +1,29 @@
-"""Compile endpoint: preview the pipeline for an intent (synchronous).
+"""Compile endpoint: turn a task into an execution plan + a compiled prompt.
 
-``understand`` is real (it may call an LLM to analyse the intent), so the endpoint
-is authenticated: every request requires a member (``get_current_user``), which also
-pins the tenant for RLS. The later stages are still STUB — each trace entry carries
-its own ``is_stub`` flag, and the top-level ``is_stub`` is true while any stage is a
-placeholder.
-
-This is a stateless preview; it persists nothing. To run and record an execution
-over a stored prompt version, use the async ``/executions`` endpoint.
+Public and stateless (no DB, no tenant) — a pure compute endpoint for the consumer
+screen. It is deterministic except for the Intent Engine's optional, cost-gated LLM
+refine. Driven by ``KompiloCore`` (see the kompilo-pipeline / kompilo-intent skills).
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.api.deps import CurrentUser
-from app.engines.pipeline import pipeline
-from app.schemas.compile import CompileRequest, CompileResponse, StageTrace
+from app.engines.kompilo_core import KompiloCore
+from app.schemas.compile import CompileRequest, CompileResponse
 
 router = APIRouter()
+_core = KompiloCore()
 
 
-@router.post("/compile", response_model=CompileResponse, summary="Preview the pipeline")
-async def compile_intent(payload: CompileRequest, user: CurrentUser) -> CompileResponse:
-    """Run the Kompilo pipeline and return its trace (no persistence).
-
-    ``understand`` is real; later stages are STUB. ``is_stub`` reflects whether any
-    stage in the trace is still a placeholder.
-    """
-    ctx = await pipeline.run(payload.intent, payload.context)
-    trace = [
-        StageTrace(stage=r.stage, status=r.status, note=r.note, is_stub=r.is_stub)
-        for r in ctx.trace
-    ]
-    return CompileResponse(
-        intent=ctx.intent,
-        strategy=ctx.artifacts,
-        trace=trace,
-        is_stub=any(t.is_stub for t in trace),
+@router.post(
+    "/compile", response_model=CompileResponse, summary="Compile a task into a plan + prompt"
+)
+async def compile_task(payload: CompileRequest) -> CompileResponse:
+    return await _core.compile(
+        payload.task,
+        target_model=payload.target_model,
+        mode=payload.mode,
+        output_format=payload.output_format,
+        quality_contract=payload.quality_contract,
     )

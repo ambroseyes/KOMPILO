@@ -4,6 +4,14 @@
 execution strategy:
 *understand → strategize → compile → route → execute → verify → evaluate → improve*.
 
+You write what you want to accomplish; Kompilo figures out *how*: it understands the
+intent into a canonical task, surfaces what's ambiguous or missing, picks a strategy and a
+model, compiles a clean prompt, runs it through a single metered Gateway, verifies the
+output, and keeps every version comparable — all multi-tenant and deterministic at its core.
+
+- **Demo walkthrough:** [`GUIDE_DEMO.md`](GUIDE_DEMO.md) — a scripted, step-by-step tour.
+- **Honest limits:** [`LIMITES_CONNUES.md`](LIMITES_CONNUES.md) — every STUB + the V1.5 plan.
+
 ## Monorepo layout
 
 ```
@@ -25,12 +33,17 @@ execution strategy:
 └── docker-compose.yml    # postgres(pgvector) · redis · backend · worker · frontend
 ```
 
-> **Status:** project skeleton. The **`understand`** stage is now a real
-> deterministic analyzer (heuristic, `method="heuristic-v1"` — not an LLM); the
-> remaining pipeline stages are still **STUB** (the `/v1/compile` response carries
-> `is_stub: true` for the pipeline as a whole, but the `understand` trace entry is
-> no longer marked STUB). The surrounding architecture — database, multi-tenant RLS
-> isolation, migrations, async ARQ workers, tooling — is real, not mocked.
+> **Status (MVP):** real end to end for `understand` → `strategize` → `compile` →
+> `execute` → `verify`, plus the **prompt library + versioning** and an **8-axis
+> explainable diagnostic**. A model **Gateway** (semantic Redis cache, retries/fallback,
+> **real** token cost, idempotency) runs the plan; an **Executor** journals each step;
+> **SSE streaming** and an output **Verifier** close the loop. `evaluate` and `improve`
+> are **not yet implemented** (no measurement → version diffs stay verdict-free), and
+> `retrieve`/RAG is a **STUB**. When no `OPENAI_API_KEY` is set, execution runs through a
+> deterministic **offline Echo STUB**, always flagged (`provider_is_real=false`). Nothing
+> stubbed is ever presented as real — the full list is in
+> [`LIMITES_CONNUES.md`](LIMITES_CONNUES.md). The surrounding architecture (multi-tenant
+> RLS, migrations, async ARQ workers, tooling) is real.
 
 ## Prerequisites
 
@@ -64,6 +77,12 @@ migrations, then serves the API on **http://localhost:8000** and the frontend on
 **http://localhost:5173**.
 
 > To run only the backend stack: `docker compose up --build postgres redis backend worker`
+
+Then, for a ready-to-demo account + a few prompts (see [`GUIDE_DEMO.md`](GUIDE_DEMO.md)):
+
+```bash
+cd backend && python scripts/seed_demo.py   # prints the demo credentials
+```
 
 ### 3. (Alternative) Run the frontend locally
 
@@ -99,13 +118,19 @@ The exact checks (commands + expected results) are in the task summary and below
    Expected: `{"status": "ok", "version": "0.1.0", "db": "ok"}` (db `ko` if the
    database is unreachable).
 
-4. **Compile pipeline (STUB)**
+4. **Compile pipeline (Kompilo Core — deterministic)**
    ```bash
    curl -s -X POST http://localhost:8000/v1/compile \
         -H 'Content-Type: application/json' \
-        -d '{"intent":"ship a feature"}' | python3 -m json.tool
+        -d '{"task":"Rédige un message de bienvenue chaleureux pour un nouveau client",
+             "mode":"professional"}' | python3 -m json.tool
    ```
-   Expected: `is_stub: true` and a `trace` of 8 stages.
+   Expected: `understood{objective, domain}` first, then (when the task is clear enough to
+   proceed) `execution_plan`, `compiled_prompt`, `renders` (compact/professional/expert),
+   a multi-dimensional `diagnostics`, and `metadata.engine:"kompilo-core-v1"` with
+   `deterministic:true` and `costs_estimated:true` (costs here are **estimated**; real
+   costs come from `/v1/execute`, step 12). An ambiguous task returns `questions` instead
+   and leaves `execution_plan/compiled_prompt/renders` null. See the `kompilo-compile` skill.
 
 5. **OpenAPI docs** — open http://localhost:8000/docs
 
@@ -196,10 +221,117 @@ The exact checks (commands + expected results) are in the task summary and below
     curl -s http://localhost:8000/v1/executions/$EXEC -H "Authorization: Bearer $TOKEN" | python3 -m json.tool
     ```
     Expected: the execution moves to `"status": "succeeded"` and `output.catr` holds the
-    structured understanding (`task_type`, `entities`, `constraints`, `open_questions`,
-    `confidence`, `method: "heuristic-v1"`); the same CATR is written onto the prompt
-    version. The worker must be running (`docker compose up worker`). The analysis is a
-    deterministic heuristic, **not** an LLM — see the `kompilo-pipeline` skill.
+    **CanonicalAITask** (CATR): `objective`, `sub_goals`, `domain`, `inputs`, `context`,
+    `constraints`, `expected_output`, `audience`, `complexity`, `missing_information`,
+    `ambiguities`, `risk`, and `meta.method` (`heuristic-v1`, or `heuristic-v1+llm` when
+    the LLM refined it). The same CATR is written onto the prompt version. The worker must
+    be running (`docker compose up worker`). The CATR is produced by the **Intent Engine**
+    (heuristics first; a light LLM is consulted **only** when confidence is low **and**
+    `OPENAI_API_KEY` is set) — see the `kompilo-intent` skill.
+
+    **Enable the LLM fallback / test your own phrases.** Paste your key in `.env`
+    (`OPENAI_API_KEY=sk-...`; optionally `OPENAI_BASE_URL`, `INTENT_LLM_MODEL`,
+    `INTENT_CONFIDENCE_THRESHOLD`). Try the engine on any sentence, offline or with the
+    LLM, from the backend venv:
+    ```bash
+    cd backend && python -c "import asyncio,json; from app.engines.intent import IntentEngine; \
+      print(json.dumps(asyncio.run(IntentEngine().run('VOTRE PHRASE ICI')).model_dump(), ensure_ascii=False, indent=2))"
+    ```
+    With no key it stays on the deterministic heuristic path (`meta.enriched_by_llm:false`);
+    with a key, a low-confidence (vague) phrase triggers one LLM call to refine the
+    objective/expected output (`meta.method:"heuristic-v1+llm"`).
+
+11. **Strategize stage (ambiguity · complexity · strategy · routing)** — consumes the CATR.
+    Runs inside the pipeline after `understand`; try the engines directly on any phrase:
+    ```bash
+    cd backend && python -c "import asyncio; \
+      from app.engines.intent import IntentEngine; from app.engines.ambiguity import AmbiguityEngine; \
+      from app.engines.complexity import ComplexityEngine; from app.engines.strategy import StrategyEngine; \
+      from app.engines.router import ModelRouter; \
+      c=asyncio.run(IntentEngine().run('VOTRE PHRASE')); x=ComplexityEngine().assess(c); s=StrategyEngine().decide(c,x); \
+      print(AmbiguityEngine().analyze(c).decision, x.level, s.kind, ModelRouter().route(c,s,x).primary)"
+    ```
+    Expected shape: a decision `ASK` (1–3 questions, only if a CRITICAL is missing) or
+    `PROCEED`; a complexity `simple|moderate|complex|agentic`; a strategy
+    `single|chain|rag`; and a primary model + fallbacks. Examples: a clear 1-liner →
+    `PROCEED simple single gpt-4o-mini`; `"truc"` → `ASK …`; a task citing a document →
+    `rag`; a 4-step agent task → `agentic chain claude-sonnet-5-5`.
+
+    **Model Capability Registry.** Model choices are driven by
+    `backend/app/engines/model_registry.yaml` (model, provider, context_window, tools,
+    vision, structured_output, reasoning_strength, cost, latency, **last_verified**).
+    Edit the YAML to add/retune models — never the routing code — and keep `last_verified`
+    fresh. See the `kompilo-strategize` skill.
+
+12. **Execute a plan (REAL cost · semantic cache · idempotency)** — reuse `$TOKEN` from
+    step 8. `/v1/execute` compiles the task, runs each step through the **Gateway**, and
+    returns the output plus **real** cost/latency metadata. With no `OPENAI_API_KEY` it
+    uses the offline Echo STUB (`provider_is_real:false`) — the flow is identical, the
+    cost is tiny but real (tokens × registry price).
+    ```bash
+    # First call — runs the plan (cached:false, a real non-zero cost):
+    curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' \
+         -d '{"task":"Rédige un message de bienvenue chaleureux pour un nouveau client"}' \
+         | python3 -m json.tool
+    # Second IDENTICAL call — served by the semantic cache (cached:true, cost 0):
+    curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' \
+         -d '{"task":"Rédige un message de bienvenue chaleureux pour un nouveau client"}' \
+         | python3 -m json.tool
+    ```
+    Expected: the **first** response has `metadata.cached:false` and
+    `metadata.actual_cost.cost_usd > 0` (and `actual:true`); the **second**, identical,
+    has `metadata.cached:true` and `cost_usd:0` — **the 2nd call is free**. The cache
+    fingerprint is `sha256(tenant + normalized request + json_mode)` (model-agnostic) and
+    is strictly tenant-scoped. Add an **`Idempotency-Key`** header to make a retry replay
+    the very same execution instead of running again:
+    ```bash
+    curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
+         -H 'Idempotency-Key: demo-key-123' -H 'Content-Type: application/json' \
+         -d '{"task":"Rédige un message de bienvenue chaleureux pour un nouveau client"}' \
+         | python3 -c "import sys,json;print(json.load(sys.stdin)['execution_id'])"
+    # Same key again → same execution_id (replayed, metadata.idempotent_replay:true).
+    ```
+    If the task is ambiguous (a CRITICAL is missing), `/v1/execute` does **not** run — it
+    returns `status:"needs_clarification"` with `questions` instead. No prompt or secret is
+    ever logged. See the `kompilo-gateway` skill.
+
+13. **Live streaming (SSE) + output Verifier** — stream an execution token by token.
+    ```bash
+    # Start an execution, capture its id:
+    EXEC=$(curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' \
+         -d '{"task":"Rédige un message de bienvenue chaleureux pour un nouveau client"}' \
+         | python3 -c "import sys,json;print(json.load(sys.stdin)['execution_id'])")
+    # Stream it over SSE. EventSource cannot set headers, so the token goes in the query:
+    curl -N "http://localhost:8000/v1/executions/$EXEC/stream?token=$TOKEN"
+    ```
+    Expected: an `text/event-stream` emitting `event: step`, then progressive
+    `event: token` chunks, then a terminal `event: done`. Without a token → **401**; an
+    unknown/foreign execution id (RLS) → **404**. The stream loads its data up front (no DB
+    session held open) and closes cleanly on client disconnect. In the UI, open
+    **http://localhost:5173**, compile a task, expand **« Exécution en direct (avancé) »**,
+    paste an `access_token`, and click **Exécuter en streaming** (hook:
+    `frontend/src/hooks/useExecutionStream.ts`).
+
+    **Verifier.** Every `/v1/execute` response carries a `verification` report. Request a
+    structured output and a schema to see it validate:
+    ```bash
+    curl -s -X POST http://localhost:8000/v1/execute -H "Authorization: Bearer $TOKEN" \
+         -H 'Content-Type: application/json' -d '{
+           "task":"Rédige la fiche d un client fictif nommé Dupont, avec son nom et son âge, au format JSON",
+           "output_format":"json",
+           "output_schema":{"required":["name","age"],
+                            "properties":{"name":{"type":"string"},"age":{"type":"integer"}}}
+         }' | python3 -c "import sys,json;print(json.load(sys.stdin)['verification'])"
+    ```
+    Expected: a `VerificationReport` with `valid` plus, when invalid, a precise list of
+    `issues[{kind, detail, path}]`. With the offline STUB the JSON lacks `name`/`age`, so
+    `valid:false` with `kind:"missing_field"` on `path:"name"` then `"age"` (a wrong type
+    would be `kind:"type_mismatch"`) — never a bare pass/fail. The JSON-Schema subset is
+    `required` + property `type`, recursive into nested objects and array items. See the
+    `kompilo-gateway` skill.
 
 ---
 
@@ -211,6 +343,25 @@ The exact checks (commands + expected results) are in the task summary and below
   tenant-owned table has an `ENABLE`+`FORCE` RLS policy filtering by `tenant_id`, so
   tenants cannot read each other's rows. Migrations run as the superuser (`kompilo`),
   which owns the tables. See the `kompilo-rls` skill.
+- **Gateway (single exit point).** Every model call goes through
+  `backend/app/engines/gateway.py`: a semantic Redis cache (fingerprint =
+  `sha256(tenant + normalized request + json_mode)`, model-agnostic, tenant-scoped),
+  retries with backoff then fallback to the next routed model, and **real** cost from
+  `tokens × registry price`. It never logs the prompt or a secret. Providers sit behind
+  one `LLMProvider` interface (OpenAI / Ollama / LM Studio, or the offline Echo STUB).
+  See the `kompilo-gateway` skill.
+- **Explainable diagnostic.** `backend/app/engines/diagnostics.py` scores a compilation on
+  **8 independent axes** (clarity, completeness, specificity, robustness, executability,
+  context quality, output definition, ambiguity handling). Each axis is `low`/`medium`/`high`
+  with — when weak — the reason and a corrective action. There is **no single aggregate
+  score**: a prompt is strong or weak in nameable ways. See the `kompilo-solidify` skill.
+- **Error handling.** `backend/app/core/errors.py` defines a taxonomy
+  (INPUT/PROMPT/MODEL/TOOL/CONTEXT/POLICY/TIMEOUT/RATE_LIMIT/VALIDATION/UNKNOWN) and the
+  strategy **detect → classify → repair → retry → fallback → verify**. Each category maps
+  to a user-safe French message + HTTP status; the Gateway retries only retryable
+  categories (stopping early on policy/validation) then falls back; the Executor repairs a
+  malformed JSON output once; the Verifier has the final say. Internals/secrets are never
+  shown to the user.
 - **Secrets.** Never committed; everything flows through `.env` (git-ignored).
 - **STUB stages.** `backend/app/engines/stages.py` returns placeholder output
   until real reasoning is implemented. Nothing stubbed is presented as real.
@@ -218,7 +369,14 @@ The exact checks (commands + expected results) are in the task summary and below
 ## Useful commands
 
 ```bash
-# Backend unit tests (no external services needed)
+# Run the WHOLE backend test suite in ONE command (from the repo root).
+# Unit tests always run; integration tests run when a migrated Postgres + Redis are
+# reachable and skip cleanly otherwise. `make check` adds lint + types.
+make test          # full suite        │  make test-unit   # unit only, zero setup
+make check         # lint + types + tests
+make frontend-build
+
+# Or directly:
 cd backend && pip install -e ".[dev]" && pytest
 
 # New migration after changing models
@@ -231,6 +389,9 @@ cd backend && ruff check . && black --check . && mypy app
 # Frontend production build
 cd frontend && npm run build
 ```
+
+When all tests pass you see a single green line like
+`108 passed in 12s` (full suite) or `99 passed in 2s` (unit only) — no failures, no errors.
 
 ## Continuous Integration
 

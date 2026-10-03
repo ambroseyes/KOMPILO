@@ -1,65 +1,72 @@
 """Pipeline stages.
 
-``understand`` and ``strategize`` are REAL. ``understand`` turns the raw intent into a
-validated ``Catr``; ``strategize`` turns that CATR into an execution ``Strategy``. Each
-is a Claude-backed analysis when a provider is configured (``claude-v1``), otherwise a
-deterministic heuristic (``heuristic-v1``). The remaining stages are still STUB
-placeholders (clearly marked) so the end-to-end pipeline stays runnable and testable
-until each is implemented for real.
+STUB / PLACEHOLDER: every stage below returns deterministic placeholder output
+so the end-to-end pipeline is runnable and testable. NONE of this is real AI
+reasoning yet — each stage is explicitly marked and MUST be replaced with the
+real implementation.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
+from app.engines.ambiguity import AmbiguityEngine
 from app.engines.base import PipelineContext, Stage, StageResult
-from app.engines.strategize import strategize
-from app.engines.understand import understand
-from app.schemas.catr import Catr
-from app.telemetry.logging import get_logger
-
-logger = get_logger(__name__)
+from app.engines.complexity import ComplexityEngine
+from app.engines.intent import IntentEngine
+from app.engines.router import ModelRouter
+from app.engines.strategy import StrategyEngine
+from app.schemas.catr import CanonicalAITask
+from app.schemas.strategize import StrategizeResult
 
 _STUB_NOTE = "STUB — placeholder output, not real reasoning."
-_METHOD_NOTE = {
-    "heuristic-v1": "Deterministic heuristic analysis (heuristic-v1); not an LLM.",
-    "claude-v1": "Claude-backed analysis (claude-v1).",
-}
 
 
 class UnderstandStage(Stage):
-    """REAL — turns the intent into a CATR via ``understand`` (LLM or heuristic)."""
+    """REAL — turns the intent into a CATR via the Intent Engine (heuristics + optional LLM)."""
 
     name = "understand"
 
     async def run(self, ctx: PipelineContext) -> StageResult:
-        intent = ctx.intent.strip()
-        if not intent:
-            return StageResult(self.name, "error", "empty intent", is_stub=False)
-        catr = await understand(intent, ctx.context)
+        catr = await IntentEngine().run(ctx.intent)
         output = catr.model_dump()
         ctx.artifacts[self.name] = output
-        note = _METHOD_NOTE.get(catr.method, f"understand ({catr.method})")
-        return StageResult(self.name, "ok", note, output, is_stub=False)
+        note = (
+            "Intent Engine v1 (heuristics + LLM refinement)."
+            if catr.meta.enriched_by_llm
+            else "Intent Engine v1 (deterministic heuristics; no LLM called)."
+        )
+        return StageResult(self.name, "ok", note, output)
 
 
 class StrategizeStage(Stage):
-    """REAL — turns the CATR into an execution Strategy (LLM or heuristic)."""
+    """REAL — consumes the CATR and runs ambiguity → complexity → strategy → routing."""
 
     name = "strategize"
 
     async def run(self, ctx: PipelineContext) -> StageResult:
         raw = ctx.artifacts.get("understand")
         if not isinstance(raw, dict):
-            return StageResult(
-                self.name, "error", "no CATR from the understand stage", is_stub=False
-            )
-        catr = Catr.model_validate(raw)
-        strategy = await strategize(catr, ctx.context)
-        output = strategy.model_dump()
+            return StageResult(self.name, "error", "No CATR available from the understand stage.")
+        catr = CanonicalAITask.model_validate(raw)
+
+        ambiguity = AmbiguityEngine().analyze(catr)
+        complexity = ComplexityEngine().assess(catr)
+        strategy = StrategyEngine().decide(catr, complexity)
+        route = ModelRouter().route(catr, strategy, complexity)
+        result = StrategizeResult(
+            ambiguity=ambiguity, complexity=complexity, strategy=strategy, route=route
+        )
+        output = result.model_dump()
         ctx.artifacts[self.name] = output
-        note = _METHOD_NOTE.get(strategy.method, f"strategize ({strategy.method})")
-        return StageResult(self.name, "ok", note, output, is_stub=False)
+
+        note = (
+            f"decision={ambiguity.decision}; complexity={complexity.level}; "
+            f"strategy={strategy.kind}; model={route.primary}"
+        )
+        if ambiguity.decision == "ASK":
+            note = "Clarification recommended before execution — " + note
+        return StageResult(self.name, "ok", note, output)
 
 
 class CompileStage(Stage):
@@ -116,15 +123,14 @@ class ImproveStage(Stage):
         return StageResult(self.name, "skipped", _STUB_NOTE, output)
 
 
-def build_default_stages() -> list[Stage]:
-    """Canonical ordered pipeline."""
-    return [
-        UnderstandStage(),
-        StrategizeStage(),
-        CompileStage(),
-        RouteStage(),
-        ExecuteStage(),
-        VerifyStage(),
-        EvaluateStage(),
-        ImproveStage(),
-    ]
+# Canonical ordered pipeline.
+DEFAULT_STAGES: list[Stage] = [
+    UnderstandStage(),
+    StrategizeStage(),
+    CompileStage(),
+    RouteStage(),
+    ExecuteStage(),
+    VerifyStage(),
+    EvaluateStage(),
+    ImproveStage(),
+]

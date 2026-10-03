@@ -1,3 +1,21 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-kompilo-navy text-slate-100 antialiased;
+  }
+  /* Visible focus ring for keyboard users (accessibility). */
+  :focus-visible {
+    @apply outline-none ring-2 ring-kompilo-blue ring-offset-2 ring-offset-kompilo-navy;
+  }
+}

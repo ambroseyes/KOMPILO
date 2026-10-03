@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.engines.base import PipelineContext, Stage, StageResult
-from app.engines.stages import build_default_stages
+from app.engines.stages import DEFAULT_STAGES
 from app.telemetry.logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,8 +30,8 @@ class Pipeline:
 
 
 def build_default_pipeline() -> Pipeline:
-    """Build the canonical pipeline."""
-    return Pipeline(build_default_stages())
+    """Build the canonical pipeline from the default ordered stages."""
+    return Pipeline(list(DEFAULT_STAGES))
 
 
 # Shared default instance.

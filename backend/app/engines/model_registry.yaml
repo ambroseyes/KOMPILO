@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Kompilo — Model Capability Registry
+#
+# The router reads these capabilities as DATA; it never hardcodes per-model logic.
+# `last_verified` is MANDATORY. The cost (USD per 1M tokens), context_window and
+# latency figures are public approximations as of that date and MUST be re-verified
+# periodically — edit this file, do not touch the routing code.
+# reasoning_strength ∈ {basic, medium, advanced, frontier}.
+# ─────────────────────────────────────────────────────────────────────────────
+models:
+  - model: gpt-4o-mini
+    provider: openai
+    context_window: 128000
+    supports_tools: true
+    supports_vision: true
+    structured_output: true
+    reasoning_strength: medium
+    cost_in: 0.15
+    cost_out: 0.60
+    latency_ms: 400
+    last_verified: 2026-10-02
+
+  - model: gpt-4o
+    provider: openai
+    context_window: 128000
+    supports_tools: true
+    supports_vision: true
+    structured_output: true
+    reasoning_strength: advanced
+    cost_in: 2.50
+    cost_out: 10.00
+    latency_ms: 800
+    last_verified: 2026-10-02
+
+  - model: claude-sonnet-5-5
+    provider: anthropic
+    context_window: 200000
+    supports_tools: true
+    supports_vision: true
+    structured_output: true
+    reasoning_strength: frontier
+    cost_in: 3.00
+    cost_out: 15.00
+    latency_ms: 900
+    last_verified: 2026-10-02
