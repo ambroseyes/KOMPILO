@@ -18,20 +18,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import CurrentUser, TenantSession, get_current_user
 from app.core.errors import KompiloError
 from app.core.redis import get_redis
-from app.engines.executor import Executor
-from app.engines.kompilo_core import KompiloCore
-from app.engines.verifier import verify_output
+from app.engines.orchestrator import KompiloPipeline
 from app.models.execution import Execution
 from app.models.execution_step import ExecutionStep
 from app.models.prompt import PromptVersion
+from app.schemas.evaluate import EvaluationReport
 from app.schemas.execute import (
     ExecuteMetadata,
     ExecuteRequest,
     ExecuteResponse,
     ExecuteStepResult,
-    RealCost,
 )
+from app.schemas.improve import ImprovementReport
 from app.schemas.verify import VerificationReport
+from app.services.execution_store import persist_success
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -79,6 +79,12 @@ async def _replay(db: AsyncSession, execution_id: uuid.UUID) -> ExecuteResponse 
     )
     verif_raw = out.get("verification")
     verification = VerificationReport.model_validate(verif_raw) if verif_raw else None
+    eval_raw = out.get("evaluation")
+    evaluation = EvaluationReport.model_validate(eval_raw) if eval_raw else None
+    impr_raw = out.get("improvements")
+    improvements = ImprovementReport.model_validate(impr_raw) if impr_raw else None
+    trace_raw = out.get("trace")
+    trace = trace_raw if isinstance(trace_raw, list) else []
     return ExecuteResponse(
         execution_id=execution.id,
         status=execution.status,
@@ -87,6 +93,9 @@ async def _replay(db: AsyncSession, execution_id: uuid.UUID) -> ExecuteResponse 
         questions=[],
         metadata=metadata,
         verification=verification,
+        evaluation=evaluation,
+        improvements=improvements,
+        trace=trace,
     )
 
 
@@ -126,104 +135,66 @@ async def execute_task(
     else:
         task = payload.task or ""
 
-    # ── Compile; stop on ambiguity ──────────────────────────────────────────────
-    compiled = await KompiloCore().compile(
-        task,
-        mode=payload.mode,
-        output_format=payload.output_format,
-        quality_contract=payload.quality_contract,
-        target_model=payload.target_model,
-    )
-    if compiled.questions or compiled.execution_plan is None or compiled.compiled_prompt is None:
+    exec_input = {"task": task, "mode": payload.mode, "output_format": payload.output_format}
+
+    # ── Run the SINGLE pipeline: understand → … → execute → verify → evaluate → improve.
+    try:
+        result = await KompiloPipeline().run(
+            task=task,
+            tenant_id=str(user.tenant_id),
+            mode=payload.mode,
+            output_format=payload.output_format,
+            target_model=payload.target_model,
+            quality_contract=payload.quality_contract,
+            output_schema=payload.output_schema,
+        )
+    except KompiloError as exc:
+        # Classified failure (model / timeout / rate-limit / policy / …): persist a failed
+        # execution, return the USER-friendly message + category (no internals/secrets).
+        execution = Execution(
+            tenant_id=user.tenant_id,
+            created_by=user.id,
+            prompt_version_id=version_id,
+            status="failed",
+            input=exec_input,
+            error=f"{exc.category}: {exc.detail}",
+            started_at=func.now(),
+            finished_at=func.now(),
+        )
+        db.add(execution)
+        await db.flush()
+        status_code, body = exc.to_http()
+        raise HTTPException(status_code, detail=body) from exc
+
+    # ── ASK: clarification needed — no execution row, return the questions. ─────────
+    if result.status == "needs_clarification":
         return ExecuteResponse(
             execution_id=None,
             status="needs_clarification",
             output="",
             steps=[],
-            questions=compiled.questions,
+            questions=result.questions,
             metadata=None,
+            trace=result.trace,
         )
 
-    # ── Create the execution row, then run the plan ─────────────────────────────
+    outcome = result.outcome
+    assert outcome is not None  # PROCEED
+
+    # ── Persist the execution via the SHARED store (journal + metadata + output). ────
     execution = Execution(
         tenant_id=user.tenant_id,
         created_by=user.id,
         prompt_version_id=version_id,
         status="running",
-        input={"task": task, "mode": payload.mode, "output_format": payload.output_format},
+        input=exec_input,
         started_at=func.now(),
     )
     db.add(execution)
     await db.flush()
     await db.refresh(execution)
 
-    json_mode = payload.output_format.lower() == "json"
-    try:
-        outcome = await Executor().run(
-            plan=compiled.execution_plan,
-            compiled_prompt=compiled.compiled_prompt.text,
-            tenant_id=str(user.tenant_id),
-            json_mode=json_mode,
-        )
-    except KompiloError as exc:
-        # Classified failure (model / timeout / rate-limit / policy / …): persist the
-        # internal detail, return the USER-friendly message + category (no internals).
-        execution.status = "failed"
-        execution.error = f"{exc.category}: {exc.detail}"
-        execution.finished_at = func.now()
-        await db.flush()
-        status_code, body = exc.to_http()
-        raise HTTPException(status_code, detail=body) from exc
-
-    # ── Journal each step + finalize the execution ──────────────────────────────
-    for step in outcome.steps:
-        db.add(
-            ExecutionStep(
-                tenant_id=user.tenant_id,
-                execution_id=execution.id,
-                step_order=step.order,
-                action=step.action,
-                input={"prompt": step.input_prompt, "repaired": step.repaired},
-                output=step.output,
-                input_tokens=step.input_tokens,
-                output_tokens=step.output_tokens,
-                cost_usd=step.cost_usd,
-                model=step.model,
-                cached=step.cached,
-                latency_ms=step.latency_ms,
-            )
-        )
-
-    note = (
-        None
-        if outcome.provider_is_real
-        else "Offline STUB provider — output is not from a real model."
-    )
-    metadata = ExecuteMetadata(
-        provider=outcome.provider,
-        provider_is_real=outcome.provider_is_real,
-        model=compiled.execution_plan.target_model,
-        actual_cost=RealCost(
-            input_tokens=outcome.total_input_tokens,
-            output_tokens=outcome.total_output_tokens,
-            cost_usd=outcome.total_cost_usd,
-        ),
-        latency_ms=outcome.total_latency_ms,
-        cached=outcome.cached_any,
-        note=note,
-    )
-    verification = verify_output(
-        outcome.output,
-        output_format=payload.output_format,
-        output_schema=payload.output_schema,
-    )
-    execution.status = "succeeded"
-    execution.output = {
-        "text": outcome.output,
-        "metadata": metadata.model_dump(),
-        "verification": verification.model_dump(),
-    }
-    execution.finished_at = func.now()
+    metadata = await persist_success(db, execution, result)
     await db.flush()
 
     if idempotency_key:
@@ -241,5 +212,8 @@ async def execute_task(
         steps=await _steps_response(db, execution.id),
         questions=[],
         metadata=metadata,
-        verification=verification,
+        verification=result.verification,
+        evaluation=result.evaluation,
+        improvements=result.improvements,
+        trace=result.trace,
     )

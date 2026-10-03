@@ -150,6 +150,41 @@ export interface VerificationReport {
   summary: string;
 }
 
+export interface EvaluationCriterion {
+  name: string;
+  passed: boolean;
+  score: number;
+  weight: number;
+  detail: string;
+}
+
+export interface EvaluationReport {
+  score: number;
+  passed: boolean;
+  criteria: EvaluationCriterion[];
+  method: string;
+  measured: boolean;
+  summary: string;
+}
+
+export interface Improvement {
+  target: string;
+  suggestion: string;
+  rationale: string;
+  derived_from: string;
+}
+
+export interface ImprovementReport {
+  improvements: Improvement[];
+  method: string;
+  summary: string;
+}
+
+export interface PipelineStage {
+  stage: string;
+  status: string;
+}
+
 export interface ExecuteResponse {
   execution_id: string | null;
   status: string;
@@ -158,6 +193,9 @@ export interface ExecuteResponse {
   questions: string[];
   metadata: ExecuteMetadata | null;
   verification: VerificationReport | null;
+  evaluation: EvaluationReport | null;
+  improvements: ImprovementReport | null;
+  trace: PipelineStage[];
 }
 
 export interface ExecuteRequest {

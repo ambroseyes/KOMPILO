@@ -105,6 +105,62 @@ export function ExecutionPanel({ task }: { task: string }) {
           {exec.verification && <> · vérification : {exec.verification.valid ? "conforme ✓" : exec.verification.summary}</>}
         </p>
       )}
+
+      {exec && exec.trace.length > 0 && (
+        <div className="flex flex-wrap gap-1 text-[11px]">
+          {exec.trace.map((s, i) => (
+            <span
+              key={`${s.stage}-${i}`}
+              className={
+                "rounded border px-1.5 py-0.5 " +
+                (s.status === "ok"
+                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                  : "border-amber-500/30 bg-amber-500/10 text-amber-300")
+              }
+            >
+              {s.stage}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {exec?.evaluation && (
+        <div className="rounded-xl border border-kompilo-border bg-kompilo-navy p-3 text-xs">
+          <p className="text-slate-300">
+            Évaluation <span className="text-slate-500">(mesurée, {exec.evaluation.method})</span> :{" "}
+            score <span className="font-semibold text-slate-100">{exec.evaluation.score.toFixed(2)}</span>{" "}
+            · {exec.evaluation.passed ? "conforme ✓" : "non conforme"}
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {exec.evaluation.criteria.map((c) => (
+              <span
+                key={c.name}
+                className={
+                  "rounded px-1.5 py-0.5 " +
+                  (c.passed ? "bg-emerald-500/10 text-emerald-300" : "bg-red-500/10 text-red-300")
+                }
+                title={c.detail}
+              >
+                {c.name} {c.score.toFixed(1)}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {exec?.improvements && exec.improvements.improvements.length > 0 && (
+        <div className="rounded-xl border border-kompilo-border bg-kompilo-navy p-3 text-xs">
+          <p className="font-semibold text-slate-300">Améliorations suggérées</p>
+          <ul className="mt-1 space-y-1">
+            {exec.improvements.improvements.map((im, i) => (
+              <li key={`${im.target}-${i}`} className="text-slate-400">
+                <span className="text-kompilo-blue-300">{im.target}</span> — {im.suggestion}{" "}
+                <span className="text-slate-600">({im.derived_from})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
