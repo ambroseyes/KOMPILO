@@ -2,6 +2,7 @@
 
 from app.db.base import Base
 from app.models.artifact import Artifact
+from app.models.documents import Document, DocumentChunk
 from app.models.execution import Execution
 from app.models.execution_step import ExecutionStep
 from app.models.organization import Organization
@@ -22,4 +23,6 @@ __all__ = [
     "Execution",
     "ExecutionStep",
     "Artifact",
+    "Document",
+    "DocumentChunk",
 ]

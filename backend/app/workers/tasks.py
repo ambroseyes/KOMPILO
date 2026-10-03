@@ -11,6 +11,7 @@ from app.core.errors import KompiloError
 from app.core.tenancy import apply_tenant_guc
 from app.db.session import session_scope
 from app.engines.orchestrator import KompiloPipeline
+from app.engines.retriever import Retriever
 from app.models.execution import Execution
 from app.models.prompt import PromptVersion
 from app.services.execution_store import persist_success
@@ -84,7 +85,9 @@ async def run_pipeline_task(
                 return {"status": "failed", "execution_id": execution_id}
 
             execution.started_at = func.now()
-            result = await KompiloPipeline().run(task=intent, tenant_id=tenant_id)
+            result = await KompiloPipeline(retriever=Retriever(s)).run(
+                task=intent, tenant_id=tenant_id
+            )
             version.catr = result.catr.model_dump(mode="json")
 
             if result.status == "needs_clarification":

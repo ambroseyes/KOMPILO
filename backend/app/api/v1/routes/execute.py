@@ -19,6 +19,7 @@ from app.api.deps import CurrentUser, TenantSession, get_current_user
 from app.core.errors import KompiloError
 from app.core.redis import get_redis
 from app.engines.orchestrator import KompiloPipeline
+from app.engines.retriever import Retriever
 from app.models.execution import Execution
 from app.models.execution_step import ExecutionStep
 from app.models.prompt import PromptVersion
@@ -139,7 +140,7 @@ async def execute_task(
 
     # ── Run the SINGLE pipeline: understand → … → execute → verify → evaluate → improve.
     try:
-        result = await KompiloPipeline().run(
+        result = await KompiloPipeline(retriever=Retriever(db)).run(
             task=task,
             tenant_id=str(user.tenant_id),
             mode=payload.mode,

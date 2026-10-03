@@ -17,6 +17,12 @@ from app.engines.providers.base import (
     ProviderError,
 )
 from app.engines.providers.echo import EchoProvider
+from app.engines.providers.embeddings import (
+    Embedder,
+    EmbeddingResult,
+    OfflineHashEmbedder,
+    OpenAICompatibleEmbedder,
+)
 from app.engines.providers.openai_compatible import OpenAICompatibleProvider
 
 __all__ = [
@@ -26,8 +32,13 @@ __all__ = [
     "ProviderCapabilities",
     "OpenAICompatibleProvider",
     "EchoProvider",
+    "Embedder",
+    "EmbeddingResult",
+    "OfflineHashEmbedder",
+    "OpenAICompatibleEmbedder",
     "get_default_provider",
     "get_execution_provider",
+    "get_embedder",
 ]
 
 
@@ -49,3 +60,14 @@ def get_default_provider() -> LLMProvider | None:
 def get_execution_provider() -> LLMProvider:
     """Real provider, or the offline Echo STUB when no key is set (execution is runnable)."""
     return _real_provider() or EchoProvider()
+
+
+def get_embedder() -> Embedder:
+    """Real OpenAI-compatible embedder, or the offline hash STUB when no key is set."""
+    if not settings.openai_api_key:
+        return OfflineHashEmbedder()
+    return OpenAICompatibleEmbedder(
+        api_key=settings.openai_api_key,
+        base_url=settings.openai_base_url,
+        model=settings.embedding_model,
+    )
