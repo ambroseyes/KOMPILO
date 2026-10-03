@@ -6,6 +6,7 @@ import { ExecutionPanel } from "./components/ExecutionPanel";
 import { LibraryPage } from "./components/LibraryPage";
 import { Logo } from "./components/Logo";
 import { ResultView } from "./components/ResultView";
+import { ThemeToggle } from "./components/ThemeToggle";
 
 type View = "compile" | "library";
 
@@ -22,7 +23,10 @@ export default function App() {
     <div className="min-h-screen">
       <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-16">
         <header className="mb-8">
-          <Logo className="text-2xl" />
+          <div className="flex items-center justify-between gap-3">
+            <Logo className="text-2xl" />
+            <ThemeToggle />
+          </div>
           <p className="mt-2 text-sm text-muted">
             AI Execution Intelligence — transforme une intention en stratégie d'exécution.
           </p>
