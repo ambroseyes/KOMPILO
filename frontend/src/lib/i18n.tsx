@@ -149,11 +149,27 @@ const MESSAGES = {
   "signin.password.aria": { en: "Password", fr: "Mot de passe" },
   "signin.submit": { en: "Sign in", fr: "Se connecter" },
   "signin.submitting": { en: "Signing in…", fr: "Connexion…" },
+  "signin.signup.intro": {
+    en: "Create your organization and owner account to get started.",
+    fr: "Crée ton organisation et ton compte propriétaire pour démarrer.",
+  },
+  "signin.orgname.ph": { en: "organization name", fr: "nom de l'organisation" },
+  "signin.orgname.aria": { en: "Organization name", fr: "Nom de l'organisation" },
+  "signin.signup.submit": { en: "Create account", fr: "Créer un compte" },
+  "signin.signup.submitting": { en: "Creating…", fr: "Création…" },
+  "signin.toggle.toSignup": {
+    en: "No account? Create one",
+    fr: "Pas de compte ? Créer un compte",
+  },
+  "signin.toggle.toLogin": {
+    en: "Already registered? Sign in",
+    fr: "Déjà inscrit ? Se connecter",
+  },
 
   // LibraryPage
   "lib.signin.hint": {
-    en: "Tip: use the account created by the demo script (see GUIDE_DEMO).",
-    fr: "Astuce : utilise le compte créé par le script de démo (voir le GUIDE_DEMO).",
+    en: "No account yet? Use « No account? Create one » above — it provisions your organization and owner account.",
+    fr: "Pas encore de compte ? Utilise « Pas de compte ? Créer un compte » ci-dessus — ça crée ton organisation et ton compte propriétaire.",
   },
   "filters.search.ph": { en: "Search (name, slug, description)", fr: "Rechercher (nom, slug, description)" },
   "filters.search.aria": { en: "Search", fr: "Recherche" },
