@@ -21,6 +21,10 @@ dependencies = [
   "pyjwt>=2.15,<3",
   "bcrypt>=4.1,<6",
   "pyyaml>=6,<7",
+  # Async HTTP client used at runtime by the OpenAI-compatible completion provider
+  # and the RAG embeddings provider. Required for the app to import, so it is a
+  # runtime dependency (not dev-only).
+  "httpx>=0.28,<0.29",
 ]
 
 [project.optional-dependencies]
@@ -30,7 +34,6 @@ dependencies = [
 dev = [
   "pytest>=9.1,<10",
   "pytest-asyncio>=1.4,<2",
-  "httpx>=0.28,<0.29",
   "ruff==0.16.10",
   "black==26.5.1",
   "mypy==2.4.0",
