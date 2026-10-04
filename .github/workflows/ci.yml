@@ -39,6 +39,35 @@ jobs:
       - name: Unit tests (no external services)
         run: pytest tests --ignore=tests/integration -q
 
+  backend-runtime-smoke:
+    name: Backend — runtime install & import (no dev deps)
+    # Guards the gap the dev extras hide: a dependency imported at runtime but
+    # declared only under [dev] passes every test (dev installs it) yet crashes
+    # the container, which installs runtime deps only. This job installs exactly
+    # what the Docker image installs (`pip install -e .`, no extras) and imports
+    # the app the same way uvicorn does, so that class of bug fails CI, not prod.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      # Settings are read at import time; throwaway CI values (no secrets).
+      JWT_SECRET: ci-dummy-jwt-secret-0123456789ab
+      DATABASE_URL: postgresql+asyncpg://user:pass@localhost:5432/placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install (runtime only — mirrors the Docker image)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - name: Import the app (mirrors `uvicorn app.main:app`)
+        run: python -c "import app.main"
+
   backend-integration:
     name: Backend — RLS integration (PostgreSQL)
     runs-on: ubuntu-latest
