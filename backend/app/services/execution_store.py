@@ -16,6 +16,7 @@ from app.engines.orchestrator import PipelineOutcome
 from app.models.execution import Execution
 from app.models.execution_step import ExecutionStep
 from app.schemas.execute import ExecuteMetadata, RealCost
+from app.services.budget import record_usage
 
 
 def build_metadata(result: PipelineOutcome) -> ExecuteMetadata:
@@ -81,4 +82,16 @@ async def persist_success(
         "catr": result.catr.model_dump(mode="json"),
     }
     execution.finished_at = func.now()
+
+    # Meter this run (append-only) so per-tenant budgets/quotas can be enforced.
+    await record_usage(
+        db,
+        tenant_id=execution.tenant_id,
+        execution_id=execution.id,
+        created_by=execution.created_by,
+        cost_usd=metadata.actual_cost.cost_usd,
+        input_tokens=metadata.actual_cost.input_tokens,
+        output_tokens=metadata.actual_cost.output_tokens,
+        provider_is_real=metadata.provider_is_real,
+    )
     return metadata
