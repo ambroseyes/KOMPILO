@@ -2,15 +2,24 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { api, type CompileMode, type CompileResponse } from "./lib/api";
 import { CompileForm } from "./components/CompileForm";
+import { DocumentsPage } from "./components/DocumentsPage";
 import { ExecutionPanel } from "./components/ExecutionPanel";
+import { ExecutionsPage } from "./components/ExecutionsPage";
 import { LanguageToggle } from "./components/LanguageToggle";
 import { LibraryPage } from "./components/LibraryPage";
 import { Logo } from "./components/Logo";
 import { ResultView } from "./components/ResultView";
 import { ThemeToggle } from "./components/ThemeToggle";
-import { useT } from "./lib/i18n";
+import { useT, type MsgKey } from "./lib/i18n";
 
-type View = "compile" | "library";
+type View = "compile" | "library" | "executions" | "documents";
+
+const VIEWS: { id: View; label: MsgKey }[] = [
+  { id: "compile", label: "nav.compile" },
+  { id: "library", label: "nav.library" },
+  { id: "executions", label: "nav.executions" },
+  { id: "documents", label: "nav.documents" },
+];
 
 export default function App() {
   const t = useT();
@@ -34,26 +43,28 @@ export default function App() {
             </div>
           </div>
           <p className="mt-2 text-sm text-muted">{t("app.tagline")}</p>
-          <nav className="mt-4 flex gap-1 rounded-xl border border-line bg-surface p-1 text-sm">
-            {(["compile", "library"] as const).map((v) => (
+          <nav className="mt-4 flex flex-wrap gap-1 rounded-xl border border-line bg-surface p-1 text-sm">
+            {VIEWS.map((v) => (
               <button
-                key={v}
+                key={v.id}
                 type="button"
-                onClick={() => setView(v)}
+                onClick={() => setView(v.id)}
                 className={
                   "rounded-lg px-4 py-1.5 font-medium transition " +
-                  (view === v
+                  (view === v.id
                     ? "bg-accent text-white"
                     : "text-muted hover:text-ink")
                 }
               >
-                {v === "compile" ? t("nav.compile") : t("nav.library")}
+                {t(v.label)}
               </button>
             ))}
           </nav>
         </header>
 
         {view === "library" && <LibraryPage />}
+        {view === "executions" && <ExecutionsPage />}
+        {view === "documents" && <DocumentsPage />}
 
         {view === "compile" && (
           <>

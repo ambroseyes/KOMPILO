@@ -22,6 +22,8 @@ const MESSAGES = {
   },
   "nav.compile": { en: "Compile", fr: "Compiler" },
   "nav.library": { en: "Library", fr: "Bibliothèque" },
+  "nav.executions": { en: "Executions", fr: "Exécutions" },
+  "nav.documents": { en: "Documents", fr: "Documents" },
   "footer.note": {
     en: "KOMPILO · the compilation core is deterministic · displayed costs = estimated",
     fr: "KOMPILO · le cœur de compilation est déterministe · coûts affichés = estimés",
@@ -232,6 +234,66 @@ const MESSAGES = {
   "detail.diff.none": {
     en: "No structural difference between these two versions.",
     fr: "Aucune différence structurelle entre ces deux versions.",
+  },
+
+  // ExecutionsPage — observability over async pipeline runs
+  "execs.signin.hint": {
+    en: "Sign in to see your execution history (isolated tenant).",
+    fr: "Connecte-toi pour voir l'historique de tes exécutions (tenant isolé).",
+  },
+  "execs.loading": { en: "Loading executions…", fr: "Chargement des exécutions…" },
+  "execs.empty": {
+    en: "No execution yet. Run a task from the Compile tab (advanced → live execution).",
+    fr: "Aucune exécution pour l'instant. Lance une tâche depuis l'onglet Compiler (avancé → exécution en direct).",
+  },
+  "execs.version": { en: "Version", fr: "Version" },
+  "execs.raw": { en: "raw task", fr: "tâche brute" },
+  "execs.back": { en: "← Back to executions", fr: "← Retour aux exécutions" },
+  "execs.live": { en: "live", fr: "en direct" },
+  "execs.created": { en: "Created", fr: "Créée" },
+  "execs.started": { en: "Started", fr: "Démarrée" },
+  "execs.finished": { en: "Finished", fr: "Terminée" },
+  "execs.error": { en: "Error", fr: "Erreur" },
+  "execs.output": { en: "Output", fr: "Résultat" },
+  "execs.input": { en: "Input", fr: "Entrée" },
+
+  // DocumentsPage — RAG corpus (ingest / search / list), tenant-isolated
+  "docs.signin.hint": {
+    en: "Sign in to manage your document corpus (RAG, isolated tenant).",
+    fr: "Connecte-toi pour gérer ton corpus de documents (RAG, tenant isolé).",
+  },
+  "docs.offline.warn": {
+    en: "Offline embeddings (lexical proxy): ranking is not semantic. Set OPENAI_API_KEY for real embeddings.",
+    fr: "Embeddings hors-ligne (proxy lexical) : le classement n'est pas sémantique. Définis OPENAI_API_KEY pour de vrais embeddings.",
+  },
+  "docs.offlineBadge": { en: "offline embeddings", fr: "embeddings hors-ligne" },
+  "docs.ingest.title": { en: "Add a document", fr: "Ajouter un document" },
+  "docs.ingest.titlePh": { en: "title", fr: "titre" },
+  "docs.ingest.titleAria": { en: "Document title", fr: "Titre du document" },
+  "docs.ingest.contentPh": { en: "paste the document text…", fr: "colle le texte du document…" },
+  "docs.ingest.contentAria": { en: "Document content", fr: "Contenu du document" },
+  "docs.ingest.sourcePh": { en: "source URI (optional)", fr: "URI source (optionnel)" },
+  "docs.ingest.sourceAria": { en: "Source URI", fr: "URI source" },
+  "docs.ingest.done": {
+    en: "Document ingested — {n} chunk(s) indexed.",
+    fr: "Document ingéré — {n} fragment(s) indexé(s).",
+  },
+  "docs.ingest.submit": { en: "Ingest", fr: "Ingérer" },
+  "docs.ingest.submitting": { en: "Ingesting…", fr: "Ingestion…" },
+  "docs.search.title": { en: "Search the corpus", fr: "Rechercher dans le corpus" },
+  "docs.search.ph": { en: "your query…", fr: "ta requête…" },
+  "docs.search.aria": { en: "Search query", fr: "Requête de recherche" },
+  "docs.search.submit": { en: "Search", fr: "Rechercher" },
+  "docs.search.searching": { en: "Searching…", fr: "Recherche…" },
+  "docs.search.empty": { en: "No matching passage.", fr: "Aucun passage correspondant." },
+  "docs.search.score": { en: "score", fr: "score" },
+  "docs.list.title": { en: "Your documents", fr: "Tes documents" },
+  "docs.list.loading": { en: "Loading documents…", fr: "Chargement des documents…" },
+  "docs.list.empty": { en: "No document yet.", fr: "Aucun document pour l'instant." },
+  "docs.delete": { en: "Delete", fr: "Supprimer" },
+  "docs.delete.confirm": {
+    en: "Delete this document and its chunks?",
+    fr: "Supprimer ce document et ses fragments ?",
   },
 } satisfies Record<string, Entry>;
 

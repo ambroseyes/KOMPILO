@@ -114,7 +114,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     }
     throw new Error(detail);
   }
-  return (await res.json()) as T;
+  // 204 No Content (e.g. DELETE) and empty bodies have no JSON to parse.
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  return (text ? (JSON.parse(text) as T) : (undefined as T));
 }
 
 // ── Execute (authenticated) ──────────────────────────────────────────────────────
@@ -330,6 +333,55 @@ export interface TokenResponse {
   expires_in: number;
 }
 
+// ── Executions (async pipeline runs; observability) ────────────────────────────────
+export interface Execution {
+  id: string;
+  tenant_id: string;
+  prompt_version_id: string | null;
+  status: string;
+  input: Record<string, unknown> | null;
+  output: Record<string, unknown> | null;
+  error: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── Documents / RAG corpus (authenticated, tenant-isolated) ─────────────────────────
+export interface DocumentRead {
+  id: string;
+  title: string;
+  source_uri: string | null;
+  embedding_model: string;
+  embedding_is_real: boolean;
+  created_at: string;
+}
+
+export interface IngestResult {
+  document: DocumentRead;
+  n_chunks: number;
+  embedding_is_real: boolean;
+  note: string;
+}
+
+export interface RetrievedChunk {
+  document_id: string;
+  document_title: string;
+  chunk_id: string;
+  chunk_index: number;
+  content: string;
+  score: number;
+}
+
+export interface SearchResult {
+  query: string;
+  chunks: RetrievedChunk[];
+  is_real: boolean;
+  note: string;
+}
+
 export const api = {
   health: () => request<Health>("/v1/health"),
   login: (body: { org_slug: string; email: string; password: string }) =>
@@ -371,5 +423,25 @@ export const api = {
     request<VersionDiff>(
       `/v1/prompts/${id}/versions/diff?from_version=${from}&to_version=${to}`,
       authed(token),
+    ),
+
+  // Executions (observability: status, cost, latency, steps)
+  listExecutions: (token: string) => request<Execution[]>("/v1/executions", authed(token)),
+  getExecution: (token: string, id: string) =>
+    request<Execution>(`/v1/executions/${id}`, authed(token)),
+
+  // Documents / RAG corpus
+  listDocuments: (token: string) => request<DocumentRead[]>("/v1/documents", authed(token)),
+  ingestDocument: (token: string, body: { title: string; content: string; source_uri?: string }) =>
+    request<IngestResult>(
+      "/v1/documents",
+      authed(token, { method: "POST", body: JSON.stringify(body) }),
+    ),
+  deleteDocument: (token: string, id: string) =>
+    request<void>(`/v1/documents/${id}`, authed(token, { method: "DELETE" })),
+  searchDocuments: (token: string, body: { query: string; k?: number }) =>
+    request<SearchResult>(
+      "/v1/documents/search",
+      authed(token, { method: "POST", body: JSON.stringify(body) }),
     ),
 };
