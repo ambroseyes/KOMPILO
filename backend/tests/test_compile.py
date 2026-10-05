@@ -69,6 +69,17 @@ async def test_compile_proceeds_on_clear_task() -> None:
         if d["level"] != "high":
             assert d["reason"] and d["recommendation"]
 
+    # Prompt quality: a readiness PQS (0-100), 11 weighted explainable axes, findings.
+    pq = body["prompt_quality"]
+    assert pq is not None
+    assert 0 <= pq["pqs"] <= 100
+    assert pq["band"] in {"insufficient", "usable", "strong", "execution_ready"}
+    assert len(pq["dimensions"]) == 11
+    for d in pq["dimensions"]:
+        assert 0.0 <= d["score"] <= 1.0 and d["level"] in {"low", "medium", "high"}
+    assert isinstance(pq["findings"], list)
+    assert pq["summary"]
+
     assert body["metadata"]["costs_estimated"] is True
     assert body["metadata"]["deterministic"] is True  # no LLM called without a key
 
@@ -83,6 +94,7 @@ async def test_compile_asks_on_vague_task() -> None:
     assert body["compiled_prompt"] is None
     assert body["execution_plan"] is None
     assert body["renders"] is None
+    assert body["prompt_quality"] is None  # no prompt compiled yet → no PQS
     # A vague task has critical gaps → clarity is "low" with a reason + corrective action.
     clarity = next(d for d in body["diagnostics"] if d["dimension"] == "clarity")
     assert clarity["level"] == "low"
