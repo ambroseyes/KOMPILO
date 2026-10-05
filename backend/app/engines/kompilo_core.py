@@ -17,6 +17,9 @@ from app.engines.complexity import ComplexityEngine
 from app.engines.diagnostics import DiagnosticEngine
 from app.engines.intent import IntentEngine
 from app.engines.prompt_compiler import PromptCompiler
+from app.engines.prompt_repair import repair as repair_prompt
+from app.engines.prompt_review import review as review_prompt
+from app.engines.prompt_scorer import composite, score_dimensions
 from app.engines.registry import default_registry
 from app.engines.router import ModelRouter
 from app.engines.strategy import StrategyEngine
@@ -32,8 +35,9 @@ from app.schemas.compile import (
     PromptRenders,
     UnderstoodIntent,
 )
+from app.schemas.prompt_quality import PromptQualityReport
 from app.schemas.registry import ModelCapability
-from app.schemas.strategize import ComplexityAssessment, Strategy
+from app.schemas.strategize import AmbiguityReport, ComplexityAssessment, RouteDecision, Strategy
 
 _OUTPUT_TOKENS_EST: dict[str, int] = {
     "simple": 300,
@@ -88,6 +92,78 @@ def _build_steps(strategy: Strategy, catr: CanonicalAITask) -> list[ExecutionSte
     return [
         ExecutionStep(order=1, action="generate", detail="Single model call for the objective.")
     ]
+
+
+_BAND_FR: dict[str, str] = {
+    "insufficient": "insuffisant",
+    "usable": "utilisable",
+    "strong": "solide",
+    "execution_ready": "prêt à exécuter",
+}
+_PQS_NOTE = (
+    "Score de *readiness* du prompt (à quel point la tâche est bien spécifiée), pas une "
+    "garantie d'exactitude de la réponse. Seuils à recalibrer sur des données réelles."
+)
+
+
+def _assess_prompt_quality(
+    *,
+    catr: CanonicalAITask,
+    compiled: CompiledPrompt,
+    route: RouteDecision,
+    complexity: ComplexityAssessment,
+    profile: ModelCapability | None,
+    ambiguity: AmbiguityReport,
+    output_format: str,
+    quality_contract: list[str],
+) -> PromptQualityReport:
+    """Score (PQS), adversarially review and — when below the gate — repair the prompt."""
+    dims = score_dimensions(
+        catr=catr,
+        prompt_text=compiled.text,
+        section_names=compiled.sections,
+        route=route,
+        complexity=complexity,
+        profile=profile,
+        ambiguity=ambiguity,
+        output_format=output_format,
+        quality_contract=quality_contract,
+    )
+    pqs, band, gate_passed = composite(dims)
+    findings = review_prompt(
+        catr=catr,
+        prompt_text=compiled.text,
+        section_names=compiled.sections,
+        profile=profile,
+        output_format=output_format,
+        quality_contract=quality_contract,
+    )
+    repair = None
+    if not gate_passed:
+        repair = repair_prompt(
+            catr=catr,
+            base_prompt_text=compiled.text,
+            section_names=compiled.sections,
+            route=route,
+            complexity=complexity,
+            profile=profile,
+            ambiguity=ambiguity,
+            output_format=output_format,
+            quality_contract=quality_contract,
+        )
+    summary = f"PQS {pqs}/100 ({_BAND_FR[band]}), {len(findings)} point(s) d'attention"
+    if repair is not None and repair.applied:
+        summary += f" ; réparé {repair.pqs_before}→{repair.pqs_after}"
+    return PromptQualityReport(
+        pqs=pqs,
+        band=band,
+        gate_passed=gate_passed,
+        dimensions=dims,
+        findings=findings,
+        repair=repair,
+        summary=summary,
+        note=_PQS_NOTE,
+    )
 
 
 class KompiloCore:
@@ -177,6 +253,17 @@ class KompiloCore:
             output_format=output_format,
         )
 
+        prompt_quality = _assess_prompt_quality(
+            catr=catr,
+            compiled=compiled,
+            route=route,
+            complexity=complexity,
+            profile=profile,
+            ambiguity=ambiguity,
+            output_format=output_format,
+            quality_contract=quality_contract,
+        )
+
         plan = ExecutionPlan(
             strategy=strategy.kind,
             target_model=profile.model if profile is not None else None,
@@ -200,6 +287,7 @@ class KompiloCore:
                 compiled_prompt=compiled,
                 renders=renders,
                 diagnostics=diagnostics,
+                prompt_quality=prompt_quality,
                 questions=[],
                 metadata=CompileMetadata(
                     deterministic=not llm_used,

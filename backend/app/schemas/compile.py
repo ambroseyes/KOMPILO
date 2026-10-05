@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.prompt_quality import PromptQualityReport
+
 CompileMode = Literal["compact", "professional", "expert"]
 
 
@@ -136,5 +138,7 @@ class CompileResponse(BaseModel):
     compiled_prompt: CompiledPrompt | None
     renders: PromptRenders | None
     diagnostics: list[DiagnosticDimension]
+    # Prompt readiness: PQS + adversarial findings + repair. Null on ASK (no prompt yet).
+    prompt_quality: PromptQualityReport | None = None
     questions: list[str]
     metadata: CompileMetadata
