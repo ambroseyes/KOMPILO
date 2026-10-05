@@ -135,6 +135,10 @@ def has_validation(prompt_text: str, section_names: list[str], quality_contract:
 def has_success_signal(
     catr: CanonicalAITask, quality_contract: list[str], section_names: list[str]
 ) -> bool:
+    # An explicit success-criteria section (Contract Engine) states acceptance criteria
+    # directly in the prompt — the strongest success signal.
+    if "success_criteria" in section_names:
+        return True
     if catr.expected_output or quality_contract or "validation" in section_names:
         return True
     return any(w in _blob(catr, quality_contract) for w in _SUCCESS_WORDS)
@@ -284,6 +288,10 @@ def score_dimensions(
 
     # 5. success_criteria.
     s = 0.0
+    # Explicit acceptance criteria woven into the prompt (Contract Engine) — additive bonus,
+    # so a prompt without the section keeps its prior score (non-regressing).
+    if "success_criteria" in section_names:
+        s += 0.4
     if catr.expected_output:
         s += 0.4
     if quality_contract:
@@ -294,7 +302,7 @@ def score_dimensions(
         _dim(
             "success_criteria",
             s,
-            "présence d'une sortie attendue / d'un contrat qualité",
+            "présence de critères de succès explicites / sortie attendue / contrat qualité",
             reason="aucun critère de succès observable n'est défini",
             recommendation="Définis ce qui rend le résultat acceptable (mesurable si possible).",
         )
@@ -351,13 +359,16 @@ def score_dimensions(
         )
     )
 
-    # 9. scope_discipline — thin today (CATR has no out_of_scope): honest low ceiling.
+    # 9. scope_discipline — an explicit scope section (Contract Engine) states in/out-of-scope
+    #    boundaries; additive bonus so a prompt without it keeps its prior score.
     s = 0.4 + (0.3 if catr.sub_goals else 0.0) + (0.1 if catr.constraints else 0.0)
+    if "scope" in section_names:
+        s += 0.3
     dims.append(
         _dim(
             "scope_discipline",
             s,
-            "périmètre borné par des sous-objectifs/contraintes",
+            "périmètre explicite (section) / borné par des sous-objectifs/contraintes",
             reason="les limites (hors-périmètre) ne sont pas explicites",
             recommendation="Énonce ce qui est hors périmètre pour éviter la dérive.",
         )

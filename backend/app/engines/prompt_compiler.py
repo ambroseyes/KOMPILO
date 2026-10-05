@@ -30,11 +30,13 @@ _SECTION_TITLE: dict[str, str] = {
     "role": "Role",
     "mission": "Mission",
     "security": "Frontières de confiance",
+    "scope": "Périmètre",
     "context": "Context",
     "steps": "Steps",
     "constraints": "Constraints",
     "audience": "Audience",
     "evidence": "Preuve & incertitude",
+    "success_criteria": "Critères de réussite",
     "output_format": "Output format",
     "validation": "Validation",
 }
@@ -47,6 +49,8 @@ def _build_ir(
     quality_contract: list[str],
     evidence_policy: list[str] | None = None,
     security_policy: list[str] | None = None,
+    scope_lines: list[str] | None = None,
+    success_criteria_lines: list[str] | None = None,
 ) -> list[PromptSection]:
     sections: list[PromptSection] = [
         PromptSection(
@@ -64,6 +68,11 @@ def _build_ir(
                 name="security", content="\n".join(f"- {line}" for line in security_policy)
             )
         )
+
+    # Scope (Contract Engine) — explicit in-scope + out-of-scope boundaries, right after the
+    # mission/boundary so the model knows its limits before reading any context. Anti-drift.
+    if scope_lines:
+        sections.append(PromptSection(name="scope", content="\n".join(scope_lines)))
 
     context_items = [*catr.context, *catr.inputs]
     if context_items:
@@ -91,6 +100,14 @@ def _build_ir(
             PromptSection(
                 name="evidence", content="\n".join(f"- {line}" for line in evidence_policy)
             )
+        )
+
+    # Success criteria (Contract Engine) — explicit, mostly-measurable acceptance criteria,
+    # placed right before output/validation (validation checks against them). Raises the PQS
+    # success_criteria axis. Present in professional/expert; compact stays terse.
+    if success_criteria_lines:
+        sections.append(
+            PromptSection(name="success_criteria", content="\n".join(success_criteria_lines))
         )
 
     output_bits: list[str] = []
@@ -160,6 +177,8 @@ class PromptCompiler:
         quality_contract: list[str],
         evidence_policy: list[str] | None = None,
         security_policy: list[str] | None = None,
+        scope_lines: list[str] | None = None,
+        success_criteria_lines: list[str] | None = None,
     ) -> tuple[PromptRenders, CompiledPrompt]:
         ir = _build_ir(
             catr,
@@ -167,6 +186,8 @@ class PromptCompiler:
             quality_contract=quality_contract,
             evidence_policy=evidence_policy,
             security_policy=security_policy,
+            scope_lines=scope_lines,
+            success_criteria_lines=success_criteria_lines,
         )
         renders = PromptRenders(
             compact=_render_compact(ir),
