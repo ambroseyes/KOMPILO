@@ -19,6 +19,7 @@ from app.core.queue import enqueue_pipeline
 from app.models.execution import Execution
 from app.models.prompt import PromptVersion
 from app.schemas.execution import ExecutionCreate, ExecutionRead
+from app.services.budget import check_budget
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
 
@@ -47,6 +48,10 @@ async def create_execution(
     db: TenantSession,
     background: BackgroundTasks,
 ) -> Execution:
+    # Budget gate BEFORE enqueuing: an over-budget tenant gets an immediate 402,
+    # no pending row, no worker job. Never degrades the run — only allows or refuses.
+    await check_budget(db, user.tenant_id)
+
     version = await _get_active_version(db, payload.prompt_version_id)
     if not (version.source_intent or "").strip():
         raise HTTPException(

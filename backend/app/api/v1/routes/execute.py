@@ -32,6 +32,7 @@ from app.schemas.execute import (
 )
 from app.schemas.improve import ImprovementReport
 from app.schemas.verify import VerificationReport
+from app.services.budget import check_budget
 from app.services.execution_store import persist_success
 
 router = APIRouter(dependencies=[Depends(get_current_user)])
@@ -137,6 +138,11 @@ async def execute_task(
         task = payload.task or ""
 
     exec_input = {"task": task, "mode": payload.mode, "output_format": payload.output_format}
+
+    # ── Budget gate: refuse a NEW run once the tenant's monthly cap is reached (402).
+    # Placed after the idempotent-replay short-circuit (a cached replay costs nothing),
+    # and it never degrades the run — it only allows or refuses.
+    await check_budget(db, user.tenant_id)
 
     # ── Run the SINGLE pipeline: understand → … → execute → verify → evaluate → improve.
     try:
