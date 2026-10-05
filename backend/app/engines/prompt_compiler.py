@@ -33,6 +33,7 @@ _SECTION_TITLE: dict[str, str] = {
     "scope": "Périmètre",
     "context": "Context",
     "steps": "Steps",
+    "approach": "Approche recommandée",
     "constraints": "Constraints",
     "audience": "Audience",
     "evidence": "Preuve & incertitude",
@@ -51,6 +52,7 @@ def _build_ir(
     security_policy: list[str] | None = None,
     scope_lines: list[str] | None = None,
     success_criteria_lines: list[str] | None = None,
+    approach_lines: list[str] | None = None,
 ) -> list[PromptSection]:
     sections: list[PromptSection] = [
         PromptSection(
@@ -86,6 +88,17 @@ def _build_ir(
                 content="\n".join(f"{i}. {g}" for i, g in enumerate(catr.sub_goals, start=1)),
             )
         )
+
+    # Recommended approach (Execution Strategy Engine) — concise HOW-to directives for
+    # non-trivial tasks, placed after the steps. Present in professional/expert; compact
+    # stays terse. Kept short (1–4 lines) so it does not hurt the PQS efficiency axis.
+    if approach_lines:
+        sections.append(
+            PromptSection(
+                name="approach", content="\n".join(f"- {line}" for line in approach_lines)
+            )
+        )
+
     if catr.constraints:
         sections.append(
             PromptSection(name="constraints", content="\n".join(f"- {c}" for c in catr.constraints))
@@ -179,6 +192,7 @@ class PromptCompiler:
         security_policy: list[str] | None = None,
         scope_lines: list[str] | None = None,
         success_criteria_lines: list[str] | None = None,
+        approach_lines: list[str] | None = None,
     ) -> tuple[PromptRenders, CompiledPrompt]:
         ir = _build_ir(
             catr,
@@ -188,6 +202,7 @@ class PromptCompiler:
             security_policy=security_policy,
             scope_lines=scope_lines,
             success_criteria_lines=success_criteria_lines,
+            approach_lines=approach_lines,
         )
         renders = PromptRenders(
             compact=_render_compact(ir),

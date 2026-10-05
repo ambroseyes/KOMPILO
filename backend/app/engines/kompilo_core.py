@@ -17,6 +17,7 @@ from app.engines.complexity import ComplexityEngine
 from app.engines.contract import ContractEngine, scope_prompt_lines, success_prompt_lines
 from app.engines.diagnostics import DiagnosticEngine
 from app.engines.evidence import EvidenceEngine
+from app.engines.execution_strategy import ExecutionStrategyEngine, approach_prompt_lines
 from app.engines.intent import IntentEngine
 from app.engines.prompt_compiler import PromptCompiler
 from app.engines.prompt_repair import repair as repair_prompt
@@ -39,6 +40,7 @@ from app.schemas.compile import (
     UnderstoodIntent,
 )
 from app.schemas.evidence import EvidenceReport
+from app.schemas.execution_strategy import ExecutionStrategy
 from app.schemas.prompt_quality import PromptQualityReport
 from app.schemas.registry import ModelCapability
 from app.schemas.security import SecurityReport
@@ -265,6 +267,15 @@ class KompiloCore:
             quality_contract=quality_contract,
         )
 
+        # Execution Strategy: decomposition + recommended tactics (decompose/tool/verify/
+        # ensemble). A concise "recommended approach" directive is woven in for non-trivial work.
+        execution_strategy: ExecutionStrategy = ExecutionStrategyEngine().plan(
+            catr=catr,
+            complexity=complexity,
+            strategy=strategy,
+            quality_contract=quality_contract,
+        )
+
         renders: PromptRenders
         compiled: CompiledPrompt
         renders, compiled = PromptCompiler().compile(
@@ -277,9 +288,11 @@ class KompiloCore:
             security_policy=security.boundary_policy,
             scope_lines=scope_prompt_lines(contract),
             success_criteria_lines=success_prompt_lines(contract),
+            approach_lines=approach_prompt_lines(execution_strategy),
         )
         evidence.injected = "evidence" in compiled.sections
         security.injected = "security" in compiled.sections
+        execution_strategy.injected = "approach" in compiled.sections
 
         diagnostics = DiagnosticEngine().assess(
             catr,
@@ -328,6 +341,7 @@ class KompiloCore:
                 evidence=evidence,
                 security=security,
                 task_contract=contract,
+                execution_strategy=execution_strategy,
                 questions=[],
                 metadata=CompileMetadata(
                     deterministic=not llm_used,
