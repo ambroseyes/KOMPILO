@@ -15,6 +15,7 @@ from collections.abc import Sequence
 from app.engines.ambiguity import AmbiguityEngine
 from app.engines.complexity import ComplexityEngine
 from app.engines.diagnostics import DiagnosticEngine
+from app.engines.evidence import EvidenceEngine
 from app.engines.intent import IntentEngine
 from app.engines.prompt_compiler import PromptCompiler
 from app.engines.prompt_repair import repair as repair_prompt
@@ -35,6 +36,7 @@ from app.schemas.compile import (
     PromptRenders,
     UnderstoodIntent,
 )
+from app.schemas.evidence import EvidenceReport
 from app.schemas.prompt_quality import PromptQualityReport
 from app.schemas.registry import ModelCapability
 from app.schemas.strategize import AmbiguityReport, ComplexityAssessment, RouteDecision, Strategy
@@ -238,11 +240,21 @@ class KompiloCore:
         route = self._router.route(catr, strategy, complexity)
         profile = _resolve_target(self._registry, target_model, route.primary)
 
+        # Evidence & uncertainty: classify the task's material and derive the policy woven
+        # into the prompt (raises the PQS evidence_discipline axis — measured below).
+        evidence: EvidenceReport = EvidenceEngine().assess(catr, strategy)
+
         renders: PromptRenders
         compiled: CompiledPrompt
         renders, compiled = PromptCompiler().compile(
-            catr, profile, mode=mode, output_format=output_format, quality_contract=quality_contract
+            catr,
+            profile,
+            mode=mode,
+            output_format=output_format,
+            quality_contract=quality_contract,
+            evidence_policy=evidence.policy,
         )
+        evidence.injected = "evidence" in compiled.sections
 
         diagnostics = DiagnosticEngine().assess(
             catr,
@@ -288,6 +300,7 @@ class KompiloCore:
                 renders=renders,
                 diagnostics=diagnostics,
                 prompt_quality=prompt_quality,
+                evidence=evidence,
                 questions=[],
                 metadata=CompileMetadata(
                     deterministic=not llm_used,

@@ -12,6 +12,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.evidence import EvidenceReport
 from app.schemas.prompt_quality import PromptQualityReport
 
 CompileMode = Literal["compact", "professional", "expert"]
@@ -140,5 +141,8 @@ class CompileResponse(BaseModel):
     diagnostics: list[DiagnosticDimension]
     # Prompt readiness: PQS + adversarial findings + repair. Null on ASK (no prompt yet).
     prompt_quality: PromptQualityReport | None = None
+    # Evidence & uncertainty: how the task's material is classified + the policy woven into
+    # the prompt. Null on ASK (no prompt compiled yet).
+    evidence: EvidenceReport | None = None
     questions: list[str]
     metadata: CompileMetadata

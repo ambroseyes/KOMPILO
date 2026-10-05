@@ -85,6 +85,36 @@ async def test_compile_proceeds_on_clear_task() -> None:
 
 
 @pytest.mark.asyncio
+async def test_compile_weaves_evidence_policy_and_lifts_pqs_axis() -> None:
+    resp = await _post({"task": _CLEAR_TASK})
+    body = resp.json()
+
+    # The evidence layer is reported and its policy is woven into the default render.
+    ev = body["evidence"]
+    assert ev is not None
+    assert ev["injected"] is True
+    assert len(ev["hierarchy"]) == 4  # source-of-truth order, highest first
+    assert ev["items"]  # material was classified
+    # Conservative: the engine promotes nothing to a verified fact on its own.
+    assert all(i["evidence_class"] not in {"fact", "verified_external_fact"} for i in ev["items"])
+    assert "## Preuve & incertitude" in body["compiled_prompt"]["text"]
+
+    # Payoff: with the policy in the prompt, evidence_discipline is no longer on the floor.
+    pq = body["prompt_quality"]
+    axis = next(d for d in pq["dimensions"] if d["dimension"] == "evidence_discipline")
+    assert axis["level"] != "low"
+
+
+@pytest.mark.asyncio
+async def test_compile_compact_render_stays_terse_without_evidence() -> None:
+    # Compact is deliberately terse: it omits the evidence section even though the IR has it.
+    resp = await _post({"task": _CLEAR_TASK, "mode": "compact"})
+    body = resp.json()
+    assert "evidence" in body["compiled_prompt"]["sections"]  # present in the IR
+    assert "## Preuve & incertitude" not in body["compiled_prompt"]["text"]  # not in compact text
+
+
+@pytest.mark.asyncio
 async def test_compile_asks_on_vague_task() -> None:
     resp = await _post({"task": "truc"})
     assert resp.status_code == 200, resp.text
@@ -95,6 +125,7 @@ async def test_compile_asks_on_vague_task() -> None:
     assert body["execution_plan"] is None
     assert body["renders"] is None
     assert body["prompt_quality"] is None  # no prompt compiled yet → no PQS
+    assert body["evidence"] is None  # no prompt compiled yet → no evidence layer
     # A vague task has critical gaps → clarity is "low" with a reason + corrective action.
     clarity = next(d for d in body["diagnostics"] if d["dimension"] == "clarity")
     assert clarity["level"] == "low"
