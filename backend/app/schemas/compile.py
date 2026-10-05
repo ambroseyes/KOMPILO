@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.schemas.evidence import EvidenceReport
 from app.schemas.prompt_quality import PromptQualityReport
 from app.schemas.security import SecurityReport
+from app.schemas.task_contract import TaskContract
 
 CompileMode = Literal["compact", "professional", "expert"]
 
@@ -148,5 +149,8 @@ class CompileResponse(BaseModel):
     # Security: injection findings + the trust-boundary policy woven into the prompt.
     # Null on ASK (no prompt compiled yet).
     security: SecurityReport | None = None
+    # Task Contract: model-neutral spec (scope, measurable success criteria, assumptions,
+    # validation, output contract, capability-based model preferences). Null on ASK.
+    task_contract: TaskContract | None = None
     questions: list[str]
     metadata: CompileMetadata

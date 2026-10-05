@@ -14,6 +14,7 @@ from collections.abc import Sequence
 
 from app.engines.ambiguity import AmbiguityEngine
 from app.engines.complexity import ComplexityEngine
+from app.engines.contract import ContractEngine, scope_prompt_lines, success_prompt_lines
 from app.engines.diagnostics import DiagnosticEngine
 from app.engines.evidence import EvidenceEngine
 from app.engines.intent import IntentEngine
@@ -42,6 +43,7 @@ from app.schemas.prompt_quality import PromptQualityReport
 from app.schemas.registry import ModelCapability
 from app.schemas.security import SecurityReport
 from app.schemas.strategize import AmbiguityReport, ComplexityAssessment, RouteDecision, Strategy
+from app.schemas.task_contract import TaskContract
 
 _OUTPUT_TOKENS_EST: dict[str, int] = {
     "simple": 300,
@@ -250,6 +252,19 @@ class KompiloCore:
         # policy woven into the prompt (treat delimited/retrieved content as data).
         security: SecurityReport = SecurityEngine().scan(task, strategy)
 
+        # Task Contract: a model-neutral spec (scope, measurable success criteria, assumptions,
+        # validation, output + capability-based model preferences). Its scope + success_criteria
+        # are woven into the prompt (raises the PQS scope_discipline + success_criteria axes).
+        contract: TaskContract = ContractEngine().build(
+            catr=catr,
+            strategy=strategy,
+            route=route,
+            profile=profile,
+            evidence=evidence,
+            output_format=output_format,
+            quality_contract=quality_contract,
+        )
+
         renders: PromptRenders
         compiled: CompiledPrompt
         renders, compiled = PromptCompiler().compile(
@@ -260,6 +275,8 @@ class KompiloCore:
             quality_contract=quality_contract,
             evidence_policy=evidence.policy,
             security_policy=security.boundary_policy,
+            scope_lines=scope_prompt_lines(contract),
+            success_criteria_lines=success_prompt_lines(contract),
         )
         evidence.injected = "evidence" in compiled.sections
         security.injected = "security" in compiled.sections
@@ -310,6 +327,7 @@ class KompiloCore:
                 prompt_quality=prompt_quality,
                 evidence=evidence,
                 security=security,
+                task_contract=contract,
                 questions=[],
                 metadata=CompileMetadata(
                     deterministic=not llm_used,

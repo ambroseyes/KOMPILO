@@ -117,6 +117,45 @@ async def test_compile_compact_render_stays_terse_without_evidence() -> None:
 
 
 @pytest.mark.asyncio
+async def test_compile_builds_task_contract_and_lifts_pqs_axes() -> None:
+    resp = await _post({"task": _CLEAR_TASK})
+    body = resp.json()
+
+    tc = body["task_contract"]
+    assert tc is not None
+    assert tc["objective"] and tc["domain"]
+    assert tc["scope"]  # at least the objective is in scope
+    assert tc["out_of_scope"]  # a standing anti-drift boundary is always present
+    assert tc["success_criteria"]  # acceptance criteria derived
+    assert any(sc["measurable"] for sc in tc["success_criteria"])  # some are machine-checkable
+    # Output contract is portable; the model preference is capability-based, not a vendor lock.
+    assert tc["output_contract"]["model_independent"] is True
+    assert tc["model_preferences"]["primary"] == body["execution_plan"]["target_model"]
+    assert tc["model_preferences"]["portability_note"]
+
+    # Both derived sections are woven into the default (professional) render.
+    assert "## Périmètre" in body["compiled_prompt"]["text"]
+    assert "## Critères de réussite" in body["compiled_prompt"]["text"]
+    assert {"scope", "success_criteria"} <= set(body["compiled_prompt"]["sections"])
+
+    # Measurable payoff: both axes are lifted off the floor by the woven sections.
+    dims = {d["dimension"]: d for d in body["prompt_quality"]["dimensions"]}
+    assert dims["success_criteria"]["level"] != "low"
+    assert dims["scope_discipline"]["level"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_compile_compact_render_omits_contract_sections() -> None:
+    resp = await _post({"task": _CLEAR_TASK, "mode": "compact"})
+    body = resp.json()
+    # Scope + success criteria are in the IR (so they still score) but kept out of the terse
+    # compact text (like evidence; unlike the safety-critical trust boundary).
+    assert {"scope", "success_criteria"} <= set(body["compiled_prompt"]["sections"])
+    assert "## Périmètre" not in body["compiled_prompt"]["text"]
+    assert "## Critères de réussite" not in body["compiled_prompt"]["text"]
+
+
+@pytest.mark.asyncio
 async def test_compile_weaves_trust_boundary_and_reports_security() -> None:
     resp = await _post({"task": _CLEAR_TASK})
     body = resp.json()
@@ -160,6 +199,7 @@ async def test_compile_asks_on_vague_task() -> None:
     assert body["prompt_quality"] is None  # no prompt compiled yet → no PQS
     assert body["evidence"] is None  # no prompt compiled yet → no evidence layer
     assert body["security"] is None  # no prompt compiled yet → no security layer
+    assert body["task_contract"] is None  # no prompt compiled yet → no task contract
     # A vague task has critical gaps → clarity is "low" with a reason + corrective action.
     clarity = next(d for d in body["diagnostics"] if d["dimension"] == "clarity")
     assert clarity["level"] == "low"
