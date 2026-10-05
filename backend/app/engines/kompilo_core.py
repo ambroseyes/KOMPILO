@@ -23,6 +23,7 @@ from app.engines.prompt_review import review as review_prompt
 from app.engines.prompt_scorer import composite, score_dimensions
 from app.engines.registry import default_registry
 from app.engines.router import ModelRouter
+from app.engines.security import SecurityEngine
 from app.engines.strategy import StrategyEngine
 from app.schemas.catr import CanonicalAITask
 from app.schemas.compile import (
@@ -39,6 +40,7 @@ from app.schemas.compile import (
 from app.schemas.evidence import EvidenceReport
 from app.schemas.prompt_quality import PromptQualityReport
 from app.schemas.registry import ModelCapability
+from app.schemas.security import SecurityReport
 from app.schemas.strategize import AmbiguityReport, ComplexityAssessment, RouteDecision, Strategy
 
 _OUTPUT_TOKENS_EST: dict[str, int] = {
@@ -244,6 +246,10 @@ class KompiloCore:
         # into the prompt (raises the PQS evidence_discipline axis — measured below).
         evidence: EvidenceReport = EvidenceEngine().assess(catr, strategy)
 
+        # Security: scan the raw task for injection patterns and derive the trust-boundary
+        # policy woven into the prompt (treat delimited/retrieved content as data).
+        security: SecurityReport = SecurityEngine().scan(task, strategy)
+
         renders: PromptRenders
         compiled: CompiledPrompt
         renders, compiled = PromptCompiler().compile(
@@ -253,8 +259,10 @@ class KompiloCore:
             output_format=output_format,
             quality_contract=quality_contract,
             evidence_policy=evidence.policy,
+            security_policy=security.boundary_policy,
         )
         evidence.injected = "evidence" in compiled.sections
+        security.injected = "security" in compiled.sections
 
         diagnostics = DiagnosticEngine().assess(
             catr,
@@ -301,6 +309,7 @@ class KompiloCore:
                 diagnostics=diagnostics,
                 prompt_quality=prompt_quality,
                 evidence=evidence,
+                security=security,
                 questions=[],
                 metadata=CompileMetadata(
                     deterministic=not llm_used,
