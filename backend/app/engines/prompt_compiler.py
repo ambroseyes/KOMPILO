@@ -33,13 +33,18 @@ _SECTION_TITLE: dict[str, str] = {
     "steps": "Steps",
     "constraints": "Constraints",
     "audience": "Audience",
+    "evidence": "Preuve & incertitude",
     "output_format": "Output format",
     "validation": "Validation",
 }
 
 
 def _build_ir(
-    catr: CanonicalAITask, *, output_format: str, quality_contract: list[str]
+    catr: CanonicalAITask,
+    *,
+    output_format: str,
+    quality_contract: list[str],
+    evidence_policy: list[str] | None = None,
 ) -> list[PromptSection]:
     sections: list[PromptSection] = [
         PromptSection(
@@ -66,6 +71,15 @@ def _build_ir(
         )
     if catr.audience:
         sections.append(PromptSection(name="audience", content=catr.audience))
+
+    # Evidence & uncertainty policy (Evidence Engine) — a rigor directive woven in before
+    # the output/validation sections. Present in professional/expert; compact stays terse.
+    if evidence_policy:
+        sections.append(
+            PromptSection(
+                name="evidence", content="\n".join(f"- {line}" for line in evidence_policy)
+            )
+        )
 
     output_bits: list[str] = []
     if catr.expected_output:
@@ -129,8 +143,14 @@ class PromptCompiler:
         mode: CompileMode,
         output_format: str,
         quality_contract: list[str],
+        evidence_policy: list[str] | None = None,
     ) -> tuple[PromptRenders, CompiledPrompt]:
-        ir = _build_ir(catr, output_format=output_format, quality_contract=quality_contract)
+        ir = _build_ir(
+            catr,
+            output_format=output_format,
+            quality_contract=quality_contract,
+            evidence_policy=evidence_policy,
+        )
         renders = PromptRenders(
             compact=_render_compact(ir),
             professional=_render_professional(ir),
