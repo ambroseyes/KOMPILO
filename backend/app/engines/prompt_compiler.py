@@ -29,6 +29,7 @@ _ROLE_BY_DOMAIN: dict[str, str] = {
 _SECTION_TITLE: dict[str, str] = {
     "role": "Role",
     "mission": "Mission",
+    "security": "Frontières de confiance",
     "context": "Context",
     "steps": "Steps",
     "constraints": "Constraints",
@@ -45,6 +46,7 @@ def _build_ir(
     output_format: str,
     quality_contract: list[str],
     evidence_policy: list[str] | None = None,
+    security_policy: list[str] | None = None,
 ) -> list[PromptSection]:
     sections: list[PromptSection] = [
         PromptSection(
@@ -52,6 +54,16 @@ def _build_ir(
         ),
         PromptSection(name="mission", content=catr.objective),
     ]
+
+    # Trust boundary (Security Engine) — placed right after the mission so the authoritative
+    # instructions precede any data/context block (incl. the executor's appended <context>).
+    # Safety-critical: included in every render, compact included.
+    if security_policy:
+        sections.append(
+            PromptSection(
+                name="security", content="\n".join(f"- {line}" for line in security_policy)
+            )
+        )
 
     context_items = [*catr.context, *catr.inputs]
     if context_items:
@@ -109,6 +121,9 @@ def _render_professional(sections: list[PromptSection]) -> str:
 def _render_compact(sections: list[PromptSection]) -> str:
     by_name = {s.name: s.content for s in sections}
     parts = [by_name["role"], by_name["mission"]]
+    if "security" in by_name:  # safety directive belongs in every render, even the terse one
+        inline = by_name["security"].replace("\n", " ").replace("- ", "")
+        parts.append(f"Trust boundary: {inline}")
     if "constraints" in by_name:
         inline = by_name["constraints"].replace("\n", " ").replace("- ", "")
         parts.append(f"Constraints: {inline}")
@@ -144,12 +159,14 @@ class PromptCompiler:
         output_format: str,
         quality_contract: list[str],
         evidence_policy: list[str] | None = None,
+        security_policy: list[str] | None = None,
     ) -> tuple[PromptRenders, CompiledPrompt]:
         ir = _build_ir(
             catr,
             output_format=output_format,
             quality_contract=quality_contract,
             evidence_policy=evidence_policy,
+            security_policy=security_policy,
         )
         renders = PromptRenders(
             compact=_render_compact(ir),

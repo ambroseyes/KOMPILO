@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.evidence import EvidenceReport
 from app.schemas.prompt_quality import PromptQualityReport
+from app.schemas.security import SecurityReport
 
 CompileMode = Literal["compact", "professional", "expert"]
 
@@ -144,5 +145,8 @@ class CompileResponse(BaseModel):
     # Evidence & uncertainty: how the task's material is classified + the policy woven into
     # the prompt. Null on ASK (no prompt compiled yet).
     evidence: EvidenceReport | None = None
+    # Security: injection findings + the trust-boundary policy woven into the prompt.
+    # Null on ASK (no prompt compiled yet).
+    security: SecurityReport | None = None
     questions: list[str]
     metadata: CompileMetadata
