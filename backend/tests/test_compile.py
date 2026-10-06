@@ -145,6 +145,32 @@ async def test_compile_builds_task_contract_and_lifts_pqs_axes() -> None:
 
 
 @pytest.mark.asyncio
+async def test_compile_reports_execution_strategy_and_weaves_approach() -> None:
+    resp = await _post({"task": _CLEAR_TASK})
+    body = resp.json()
+
+    es = body["execution_strategy"]
+    assert es is not None
+    assert es["primary"] in {
+        "direct",
+        "decomposition",
+        "tool_augmented",
+        "verification_loop",
+        "ensemble",
+    }
+    # _CLEAR_TASK is software → the verification-loop tactic is recommended with a rationale.
+    verify = next(t for t in es["tactics"] if t["tactic"] == "verification_loop")
+    assert verify["recommended"] is True and verify["rationale"]
+    # A non-trivial tactic fired → the concise "recommended approach" directive is woven in.
+    assert es["primary"] != "direct"
+    assert es["injected"] is True
+    assert "## Approche recommandée" in body["compiled_prompt"]["text"]
+    assert "approach" in body["compiled_prompt"]["sections"]
+    # Honest: it is process guidance, not a guarantee; the executor is unchanged.
+    assert "pas une garantie" in es["note"]
+
+
+@pytest.mark.asyncio
 async def test_compile_compact_render_omits_contract_sections() -> None:
     resp = await _post({"task": _CLEAR_TASK, "mode": "compact"})
     body = resp.json()
@@ -200,6 +226,7 @@ async def test_compile_asks_on_vague_task() -> None:
     assert body["evidence"] is None  # no prompt compiled yet → no evidence layer
     assert body["security"] is None  # no prompt compiled yet → no security layer
     assert body["task_contract"] is None  # no prompt compiled yet → no task contract
+    assert body["execution_strategy"] is None  # no prompt compiled yet → no execution strategy
     # A vague task has critical gaps → clarity is "low" with a reason + corrective action.
     clarity = next(d for d in body["diagnostics"] if d["dimension"] == "clarity")
     assert clarity["level"] == "low"

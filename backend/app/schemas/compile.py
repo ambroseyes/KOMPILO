@@ -13,6 +13,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.evidence import EvidenceReport
+from app.schemas.execution_strategy import ExecutionStrategy
 from app.schemas.prompt_quality import PromptQualityReport
 from app.schemas.security import SecurityReport
 from app.schemas.task_contract import TaskContract
@@ -152,5 +153,8 @@ class CompileResponse(BaseModel):
     # Task Contract: model-neutral spec (scope, measurable success criteria, assumptions,
     # validation, output contract, capability-based model preferences). Null on ASK.
     task_contract: TaskContract | None = None
+    # Execution Strategy: subtask decomposition + recommended tactics (decompose,
+    # tool-augmented, verification-loop, ensemble). Null on ASK.
+    execution_strategy: ExecutionStrategy | None = None
     questions: list[str]
     metadata: CompileMetadata
