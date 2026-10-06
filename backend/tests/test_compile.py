@@ -182,6 +182,48 @@ async def test_compile_compact_render_omits_contract_sections() -> None:
 
 
 @pytest.mark.asyncio
+async def test_compile_adapts_to_model_family_and_reports_portability() -> None:
+    # Force an Anthropic target → deterministic family + its woven directive.
+    resp = await _post({"task": _CLEAR_TASK, "target_model": "claude-sonnet-5-5"})
+    body = resp.json()
+
+    ma = body["model_adapter"]
+    assert ma is not None
+    assert ma["target_model"] == "claude-sonnet-5-5"
+    assert ma["provider"] == "anthropic" and ma["family"] == "anthropic"
+    assert ma["model_independent"] is True  # the base prompt stays portable
+    assert ma["directives"]  # a family-tuned directive is produced
+    assert ma["injected"] is True
+    assert "## Adaptation modèle" in body["compiled_prompt"]["text"]
+    assert "model_adapter" in body["compiled_prompt"]["sections"]
+
+    # Explicit portability: the full family map is reported (never hardcode a vendor).
+    families = {p["family"] for p in ma["known_families"]}
+    assert {"anthropic", "openai", "deepseek", "qwen", "generic"} <= families
+    # Honest: conventions, not guarantees — and the adapter never forces a chain-of-thought.
+    assert "pas des garanties" in ma["note"]
+    assert all(
+        "étape par étape" not in d.lower() and "step by step" not in d.lower()
+        for d in ma["directives"]
+    )
+
+    # Non-regression: the thin family layer must not trip the PQS efficiency anti-pattern.
+    eff = next(d for d in body["prompt_quality"]["dimensions"] if d["dimension"] == "efficiency")
+    assert eff["level"] == "high"
+
+
+@pytest.mark.asyncio
+async def test_compile_compact_render_omits_model_adapter_section() -> None:
+    resp = await _post(
+        {"task": _CLEAR_TASK, "target_model": "claude-sonnet-5-5", "mode": "compact"}
+    )
+    body = resp.json()
+    # The adaptation is in the IR (so it is reported) but kept out of the terse compact text.
+    assert "model_adapter" in body["compiled_prompt"]["sections"]
+    assert "## Adaptation modèle" not in body["compiled_prompt"]["text"]
+
+
+@pytest.mark.asyncio
 async def test_compile_weaves_trust_boundary_and_reports_security() -> None:
     resp = await _post({"task": _CLEAR_TASK})
     body = resp.json()
@@ -227,6 +269,7 @@ async def test_compile_asks_on_vague_task() -> None:
     assert body["security"] is None  # no prompt compiled yet → no security layer
     assert body["task_contract"] is None  # no prompt compiled yet → no task contract
     assert body["execution_strategy"] is None  # no prompt compiled yet → no execution strategy
+    assert body["model_adapter"] is None  # no prompt compiled yet → no model adapter
     # A vague task has critical gaps → clarity is "low" with a reason + corrective action.
     clarity = next(d for d in body["diagnostics"] if d["dimension"] == "clarity")
     assert clarity["level"] == "low"

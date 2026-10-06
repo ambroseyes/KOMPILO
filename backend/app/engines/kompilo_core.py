@@ -19,6 +19,7 @@ from app.engines.diagnostics import DiagnosticEngine
 from app.engines.evidence import EvidenceEngine
 from app.engines.execution_strategy import ExecutionStrategyEngine, approach_prompt_lines
 from app.engines.intent import IntentEngine
+from app.engines.model_adapter import ModelAdapterEngine, adapter_prompt_lines
 from app.engines.prompt_compiler import PromptCompiler
 from app.engines.prompt_repair import repair as repair_prompt
 from app.engines.prompt_review import review as review_prompt
@@ -41,6 +42,7 @@ from app.schemas.compile import (
 )
 from app.schemas.evidence import EvidenceReport
 from app.schemas.execution_strategy import ExecutionStrategy
+from app.schemas.model_adapter import ModelAdapterReport
 from app.schemas.prompt_quality import PromptQualityReport
 from app.schemas.registry import ModelCapability
 from app.schemas.security import SecurityReport
@@ -276,6 +278,11 @@ class KompiloCore:
             quality_contract=quality_contract,
         )
 
+        # Model Adapter: a thin, swappable per-family layer. It tunes HOW the chosen model is
+        # addressed (the base prompt stays model-independent) and reports how to port the same
+        # prompt to every known family — operationalising "never hardcode a vendor".
+        model_adapter: ModelAdapterReport = ModelAdapterEngine().adapt(profile)
+
         renders: PromptRenders
         compiled: CompiledPrompt
         renders, compiled = PromptCompiler().compile(
@@ -289,10 +296,12 @@ class KompiloCore:
             scope_lines=scope_prompt_lines(contract),
             success_criteria_lines=success_prompt_lines(contract),
             approach_lines=approach_prompt_lines(execution_strategy),
+            model_adapter_lines=adapter_prompt_lines(model_adapter),
         )
         evidence.injected = "evidence" in compiled.sections
         security.injected = "security" in compiled.sections
         execution_strategy.injected = "approach" in compiled.sections
+        model_adapter.injected = "model_adapter" in compiled.sections
 
         diagnostics = DiagnosticEngine().assess(
             catr,
@@ -342,6 +351,7 @@ class KompiloCore:
                 security=security,
                 task_contract=contract,
                 execution_strategy=execution_strategy,
+                model_adapter=model_adapter,
                 questions=[],
                 metadata=CompileMetadata(
                     deterministic=not llm_used,
