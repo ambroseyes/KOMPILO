@@ -34,6 +34,7 @@ _SECTION_TITLE: dict[str, str] = {
     "context": "Context",
     "steps": "Steps",
     "approach": "Approche recommandée",
+    "model_adapter": "Adaptation modèle",
     "constraints": "Constraints",
     "audience": "Audience",
     "evidence": "Preuve & incertitude",
@@ -53,6 +54,7 @@ def _build_ir(
     scope_lines: list[str] | None = None,
     success_criteria_lines: list[str] | None = None,
     approach_lines: list[str] | None = None,
+    model_adapter_lines: list[str] | None = None,
 ) -> list[PromptSection]:
     sections: list[PromptSection] = [
         PromptSection(
@@ -96,6 +98,18 @@ def _build_ir(
         sections.append(
             PromptSection(
                 name="approach", content="\n".join(f"- {line}" for line in approach_lines)
+            )
+        )
+
+    # Model adaptation (Model Adapter Engine, bloc F) — a thin, swappable set of family-tuned
+    # directives for the CHOSEN target model (how to address it; never what to produce). The
+    # base prompt stays model-independent. Present in professional/expert; compact stays terse;
+    # kept to 1–2 lines so the PQS efficiency axis is unaffected. Empty for the generic family.
+    if model_adapter_lines:
+        sections.append(
+            PromptSection(
+                name="model_adapter",
+                content="\n".join(f"- {line}" for line in model_adapter_lines),
             )
         )
 
@@ -193,6 +207,7 @@ class PromptCompiler:
         scope_lines: list[str] | None = None,
         success_criteria_lines: list[str] | None = None,
         approach_lines: list[str] | None = None,
+        model_adapter_lines: list[str] | None = None,
     ) -> tuple[PromptRenders, CompiledPrompt]:
         ir = _build_ir(
             catr,
@@ -203,6 +218,7 @@ class PromptCompiler:
             scope_lines=scope_lines,
             success_criteria_lines=success_criteria_lines,
             approach_lines=approach_lines,
+            model_adapter_lines=model_adapter_lines,
         )
         renders = PromptRenders(
             compact=_render_compact(ir),

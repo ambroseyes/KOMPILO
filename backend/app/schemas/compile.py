@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.evidence import EvidenceReport
 from app.schemas.execution_strategy import ExecutionStrategy
+from app.schemas.model_adapter import ModelAdapterReport
 from app.schemas.prompt_quality import PromptQualityReport
 from app.schemas.security import SecurityReport
 from app.schemas.task_contract import TaskContract
@@ -156,5 +157,8 @@ class CompileResponse(BaseModel):
     # Execution Strategy: subtask decomposition + recommended tactics (decompose,
     # tool-augmented, verification-loop, ensemble). Null on ASK.
     execution_strategy: ExecutionStrategy | None = None
+    # Model Adapter: a thin, swappable per-family layer tuning how the chosen model is
+    # addressed (base prompt stays model-independent) + the portability map. Null on ASK.
+    model_adapter: ModelAdapterReport | None = None
     questions: list[str]
     metadata: CompileMetadata
